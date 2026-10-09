@@ -1,0 +1,6 @@
+{
+  "name": "NEGRITO DE HUÁNUCO",
+  "description": "Plataforma oficial de delivery, mandados y mensajería en Huánuco - negritodehuanuco.com",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
