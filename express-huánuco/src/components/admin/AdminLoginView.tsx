@@ -116,13 +116,7 @@ export const AdminLoginView: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          </button>
-
-      <div className="pt-1 text-center">
-        <button
-          type="button"
-          onClick={() => navigateTo('/')}
-          className="text-xs text-slate-500 hover:text-slate-900 font-semibold"
+  
 
           <div className="pt-1 text-center">
             <button
