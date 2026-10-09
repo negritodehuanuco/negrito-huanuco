@@ -10,7 +10,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
- "dependencies": {
+  "dependencies": {
     "@supabase/supabase-js": "^2.48.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -23,7 +23,6 @@
     "dotenv": "^17.2.3",
     "motion": "^12.23.24"
   },
-  "devDependencies": {
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
