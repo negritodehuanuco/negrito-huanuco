@@ -68,7 +68,6 @@ interface AppContextType {
     balance: number;
     transactions: WalletTransaction[];
   };
-  // Acciones
   createOrder: (newOrder: Omit<Order, 'id' | 'createdAt' | 'status'>) => Order;
   updateOrderStatus: (orderId: string, status: OrderStatus, note?: string) => void;
   acceptOrderAsDriver: (orderId: string, driverId?: string) => void;
@@ -108,7 +107,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper para persistencia local sincronizada
 const getStored = <T,>(key: string, fallback: T): T => {
   if (typeof window === 'undefined') return fallback;
   try {
@@ -124,9 +122,7 @@ const setStored = <T,>(key: string, value: T) => {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
     window.dispatchEvent(new Event('ndh_storage_sync'));
-  } catch {
-    // Manejo de cuota
-  }
+  } catch {}
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -136,51 +132,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = decodeURIComponent(window.location.hash).toLowerCase().trim().replace(/^#\/?/, '');
       const path = (pathname !== '/' && pathname !== '') ? pathname.replace(/^\//, '') : hash;
 
-      if (path.startsWith('admin') || path.startsWith('administra')) {
-        return '/admin';
-      }
-      if (path.startsWith('repartidor')) {
-        return '/repartidor';
-      }
-      if (path.startsWith('visualizacion')) {
-        return '/visualizacion';
-      }
+      if (path.startsWith('admin') || path.startsWith('administra')) return '/admin';
+      if (path.startsWith('repartidor')) return '/repartidor';
+      if (path.startsWith('visualizacion')) return '/visualizacion';
       return '/';
     }
     return '/';
   };
 
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(getInitialRoute);
-
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() =>
-    getStored<AppUser | null>('ndh_currentUser', null)
-  );
-
-  const [users, setUsers] = useState<AppUser[]>(() =>
-    getStored<AppUser[]>('ndh_users', INITIAL_USERS)
-  );
-
-  const [clients, setClients] = useState<ClientProfile[]>(() =>
-    getStored<ClientProfile[]>('ndh_clients', INITIAL_CLIENTS)
-  );
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    return getStored<Order[]>('ndh_orders', []);
-  });
-
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getStored<AppUser | null>('ndh_currentUser', null));
+  const [users, setUsers] = useState<AppUser[]>(() => getStored<AppUser[]>('ndh_users', INITIAL_USERS));
+  const [clients, setClients] = useState<ClientProfile[]>(() => getStored<ClientProfile[]>('ndh_clients', INITIAL_CLIENTS));
+  const [orders, setOrders] = useState<Order[]>(() => getStored<Order[]>('ndh_orders', []));
   const [drivers, setDrivers] = useState<DriverInfo[]>(() => {
     const list = getStored<DriverInfo[]>('ndh_drivers', INITIAL_DRIVERS);
     return list.filter((d) => !['DRV-101', 'DRV-102', 'DRV-103', 'DRV-01', 'DRV-02'].includes(d.id));
   });
-
-  const [applications, setApplications] = useState<DriverApplication[]>(() =>
-    getStored<DriverApplication[]>('ndh_applications', INITIAL_APPLICATIONS)
-  );
-
-  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(() =>
-    getStored<CommissionConfig>('ndh_config', INITIAL_CONFIG)
-  );
-
+  const [applications, setApplications] = useState<DriverApplication[]>(() => getStored<DriverApplication[]>('ndh_applications', INITIAL_APPLICATIONS));
+  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(() => getStored<CommissionConfig>('ndh_config', INITIAL_CONFIG));
   const [wallet, setWallet] = useState<{ balance: number; transactions: WalletTransaction[] }>(() =>
     getStored('ndh_wallet', { balance: 0, transactions: INITIAL_WALLET_TRANSACTIONS })
   );
@@ -189,23 +159,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isClientProfileOpen, setIsClientProfileOpen] = useState<boolean>(false);
   const [role, setRole] = useState<UserRole>(() => currentUser?.role || 'client');
-
   const [activeClientOrderId, setActiveClientOrderId] = useState<string | null>(() => {
     const val = getStored<string | null>('ndh_activeClientOrderId', null);
     return val === 'HX-8F42K' ? null : val;
   });
-
-  const [activeDriverId, setActiveDriverId] = useState<string>(() =>
-    currentUser?.driverProfileId || ''
-  );
-
+  const [activeDriverId, setActiveDriverId] = useState<string>(() => currentUser?.driverProfileId || '');
   const [driverOnline, setDriverOnline] = useState<boolean>(true);
   const [openRegistrationModal, setOpenRegistrationModal] = useState<boolean>(false);
   const [openWhatsAppModal, setOpenWhatsAppModal] = useState<boolean>(false);
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | null>(null);
   const [chatSenderRole, setChatSenderRole] = useState<'client' | 'driver'>('client');
 
-  // Integración Supabase: Carga inicial y escucha en Tiempo Real
+  // Supabase inicial y tiempo real
   useEffect(() => {
     const fetchSupabaseOrders = async () => {
       try {
@@ -227,10 +192,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
 
           setOrders((prev) => {
-            const combinedMap = new Map<string, Order>();
-            prev.forEach((o) => combinedMap.set(o.id, o));
-            parsedOrders.forEach((o) => combinedMap.set(o.id, o));
-            return Array.from(combinedMap.values());
+            const map = new Map<string, Order>();
+            prev.forEach((o) => map.set(o.id, o));
+            parsedOrders.forEach((o) => map.set(o.id, o));
+            return Array.from(map.values());
           });
         }
       } catch (err) {
@@ -240,29 +205,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     fetchSupabaseOrders();
 
-    // Suscripción Realtime a cambios en la tabla 'orders'
     const channel = supabase
       .channel('realtime_orders')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        (payload: any) => {
-          if (payload.eventType === 'INSERT') {
-            const newRow = payload.new;
-            const newOrder: Order = newRow.payload || newRow;
-            setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedRow = payload.new;
-            const updatedOrder: Order = updatedRow.payload || updatedRow;
-            setOrders((prev) =>
-              prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const deletedId = payload.old.id;
-            setOrders((prev) => prev.filter((o) => o.id !== deletedId));
-          }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload: any) => {
+        if (payload.eventType === 'INSERT') {
+          const newOrder: Order = payload.new.payload || payload.new;
+          setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedOrder: Order = payload.new.payload || payload.new;
+          setOrders((prev) => prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o)));
+        } else if (payload.eventType === 'DELETE') {
+          setOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
         }
-      )
+      })
       .subscribe();
 
     return () => {
@@ -270,7 +225,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Helper para persistir orden remota en Supabase
   const syncOrderToSupabase = async (order: Order) => {
     try {
       await supabase.from('orders').upsert({
@@ -280,48 +234,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updated_at: new Date().toISOString(),
       });
     } catch (e) {
-      console.warn('No se pudo guardar la orden en Supabase:', e);
+      console.warn('Error upsert orden:', e);
     }
   };
 
-  // Sincronización continua de localStorage
-  useEffect(() => {
-    setStored('ndh_orders', orders);
-  }, [orders]);
+  useEffect(() => { setStored('ndh_orders', orders); }, [orders]);
+  useEffect(() => { setStored('ndh_drivers', drivers); }, [drivers]);
+  useEffect(() => { setStored('ndh_applications', applications); }, [applications]);
+  useEffect(() => { setStored('ndh_users', users); }, [users]);
+  useEffect(() => { setStored('ndh_clients', clients); }, [clients]);
+  useEffect(() => { setStored('ndh_currentUser', currentUser); }, [currentUser]);
+  useEffect(() => { setStored('ndh_wallet', wallet); }, [wallet]);
+  useEffect(() => { setStored('ndh_config', commissionConfig); }, [commissionConfig]);
+  useEffect(() => { setStored('ndh_activeClientOrderId', activeClientOrderId); }, [activeClientOrderId]);
 
-  useEffect(() => {
-    setStored('ndh_drivers', drivers);
-  }, [drivers]);
-
-  useEffect(() => {
-    setStored('ndh_applications', applications);
-  }, [applications]);
-
-  useEffect(() => {
-    setStored('ndh_users', users);
-  }, [users]);
-
-  useEffect(() => {
-    setStored('ndh_clients', clients);
-  }, [clients]);
-
-  useEffect(() => {
-    setStored('ndh_currentUser', currentUser);
-  }, [currentUser]);
-
-  useEffect(() => {
-    setStored('ndh_wallet', wallet);
-  }, [wallet]);
-
-  useEffect(() => {
-    setStored('ndh_config', commissionConfig);
-  }, [commissionConfig]);
-
-  useEffect(() => {
-    setStored('ndh_activeClientOrderId', activeClientOrderId);
-  }, [activeClientOrderId]);
-
-  // Escucha cambios de almacenamiento (otra pestaña o ventana)
   useEffect(() => {
     const handleSync = () => {
       setOrders(getStored<Order[]>('ndh_orders', []).filter((o) => o.id !== 'HX-8F42K'));
@@ -341,7 +267,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Navegación limpia de rutas
   const navigateTo = (route: AppRoute) => {
     let canonical: AppRoute = route;
     if (route === '/cliente') canonical = '/';
@@ -354,9 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const targetPath = canonical === '/' ? '/' : canonical;
         window.history.pushState({ route: canonical }, '', targetPath);
-      } catch {
-        // Fallback para sandbox
-      }
+      } catch {}
     }
   };
 
@@ -366,15 +289,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = decodeURIComponent(window.location.hash).toLowerCase().trim().replace(/^#\/?/, '');
       const path = (pathname !== '/' && pathname !== '') ? pathname.replace(/^\//, '') : hash;
 
-      if (path.startsWith('admin') || path.startsWith('administra')) {
-        setCurrentRoute('/admin');
-      } else if (path.startsWith('repartidor')) {
-        setCurrentRoute('/repartidor');
-      } else if (path.startsWith('visualizacion')) {
-        setCurrentRoute('/visualizacion');
-      } else {
-        setCurrentRoute('/');
-      }
+      if (path.startsWith('admin') || path.startsWith('administra')) setCurrentRoute('/admin');
+      else if (path.startsWith('repartidor')) setCurrentRoute('/repartidor');
+      else if (path.startsWith('visualizacion')) setCurrentRoute('/visualizacion');
+      else setCurrentRoute('/');
     };
 
     window.addEventListener('popstate', handleRouteSync);
@@ -385,7 +303,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // REGLA DE NEGOCIO: 20% Comisión Empresa / 80% Ganancia Neta Repartidor
   const calculateFare = (
     distanceKm: number,
     serviceType: string,
@@ -394,7 +311,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ) => {
     let base = commissionConfig.baseFare;
     let kmRate = commissionConfig.perKmFare;
-
     let typeExtra = 0;
     if (serviceType === 'compra') typeExtra = 2.0;
     if (serviceType === 'otro') typeExtra = 3.0;
@@ -411,7 +327,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const minFare = serviceType === 'transporte' && transportVehicle === 'moto' ? 4.0 : commissionConfig.minimumFare;
     const rawServicePrice = Math.max(minFare, base + distanceKm * kmRate + typeExtra);
     const servicePrice = Math.round(rawServicePrice * 10) / 10;
-
     const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
     const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
     const total = servicePrice + (estimatedCost || 0);
@@ -426,11 +341,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  // Creación de pedidos
   const createOrder = (newOrderData: Omit<Order, 'id' | 'createdAt' | 'status'>): Order => {
     const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
     const newId = `HX-${randomHex}`;
-
     const servicePrice = newOrderData.pricing.servicePrice;
     const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
     const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
@@ -440,17 +353,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: newId,
       createdAt: 'Justo ahora',
       status: 'recibido',
-      pricing: {
-        ...newOrderData.pricing,
-        platformFee,
-        driverEarnings,
-      },
-      payment: {
-        ...newOrderData.payment,
-        servicePrice,
-        platformFee,
-        driverEarnings,
-      },
+      pricing: { ...newOrderData.pricing, platformFee, driverEarnings },
+      payment: { ...newOrderData.payment, servicePrice, platformFee, driverEarnings },
     };
 
     setOrders((prev) => [newOrder, ...prev]);
@@ -472,7 +376,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (status === 'entregado') {
           const earnings = order.pricing?.driverEarnings || order.payment?.driverEarnings || Math.round(order.pricing.servicePrice * 0.8 * 10) / 10;
-
           setWallet((w) => ({
             balance: Math.round((w.balance + earnings) * 10) / 10,
             transactions: [
@@ -523,11 +426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
-        const updated = {
-          ...o,
-          driver: foundDriver,
-          status: 'asignado' as const,
-        };
+        const updated = { ...o, driver: foundDriver, status: 'asignado' as const };
         syncOrderToSupabase(updated);
         return updated;
       })
@@ -581,14 +480,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const ignoreOrderAsDriver = (orderId: string, driverId?: string) => {
     const dId = driverId || activeDriverId;
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              ignoredByDrivers: [...(o.ignoredByDrivers || []), dId],
-            }
-          : o
-      )
+      prev.map((o) => (o.id === orderId ? { ...o, ignoredByDrivers: [...(o.ignoredByDrivers || []), dId] } : o))
     );
   };
 
@@ -680,7 +572,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // Postulación a repartidor
   const submitDriverApplication = (appData: Omit<DriverApplication, 'id' | 'status' | 'submittedAt'>) => {
     const newApp: DriverApplication = {
       ...appData,
@@ -692,11 +583,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newApp;
   };
 
-  // Aprobación de repartidor
   const updateApplicationStatus = (appId: string, status: 'APROBADO' | 'RECHAZADO') => {
-    setApplications((prev) =>
-      prev.map((a) => (a.id === appId ? { ...a, status } : a))
-    );
+    setApplications((prev) => prev.map((a) => (a.id === appId ? { ...a, status } : a)));
 
     if (status === 'APROBADO') {
       const app = applications.find((a) => a.id === appId);
@@ -739,10 +627,297 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCommissionConfig((prev) => ({ ...prev, ...newConfig }));
   };
 
-  // Autenticación
   const login = (email: string, password?: string, intendedRole?: UserRole) => {
     const cleanEmail = email.trim().toLowerCase();
 
     if (cleanEmail === 'maycolconde13@gmail.com' && password === 'shongmaycolriveracode') {
       const adminUser: AppUser = {
         id: 'USR-ADMIN-01',
+        name: 'Administrador General',
+        phone: '976 387 226',
+        email: 'maycolconde13@gmail.com',
+        role: 'admin',
+        createdAt: '2025',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+      };
+      setCurrentUser(adminUser);
+      setRole('admin');
+      navigateTo('/admin');
+      return { success: true };
+    }
+
+    let found = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!found && intendedRole === 'driver') {
+      return {
+        success: false,
+        message: 'No existe una cuenta de repartidor registrada con este correo. Por favor postula o regístrate en "Quiero ser repartidor".',
+      };
+    }
+
+    if (!found) {
+      found = {
+        id: `USR-${Date.now()}`,
+        name: cleanEmail.split('@')[0],
+        email: cleanEmail,
+        phone: '962 000 000',
+        role: intendedRole || 'client',
+        createdAt: 'Hoy',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      };
+      setUsers((prev) => [...prev, found!]);
+    }
+
+    if (intendedRole && found.role !== intendedRole) {
+      return {
+        success: false,
+        message: `Esta cuenta no tiene permisos para ingresar al área de ${intendedRole}.`,
+      };
+    }
+
+    setCurrentUser(found);
+    setRole(found.role);
+    if (found.driverProfileId) setActiveDriverId(found.driverProfileId);
+
+    if (found.role === 'admin') navigateTo('/admin');
+    else if (found.role === 'driver') navigateTo('/repartidor');
+    else navigateTo('/');
+
+    return { success: true };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setRole('client');
+    navigateTo('/');
+  };
+
+  const registerClient = (data: { name: string; email: string; phone: string; address?: string }) => {
+    const newUser: AppUser = {
+      id: `CLI-${Date.now()}`,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      address: data.address || 'Huánuco',
+      role: 'client',
+      createdAt: 'Hoy',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+    };
+    setUsers((prev) => [...prev, newUser]);
+    setClients((prev) => [
+      {
+        id: newUser.id,
+        name: newUser.name,
+        phone: newUser.phone,
+        email: newUser.email,
+        address: newUser.address || 'Huánuco',
+        totalOrders: 0,
+        registeredAt: 'Hoy',
+        status: 'ACTIVO',
+      },
+      ...prev,
+    ]);
+    setCurrentUser(newUser);
+    setRole('client');
+    return { success: true, user: newUser };
+  };
+
+  const registerDriver = (data: any) => {
+    const newApp = submitDriverApplication(data);
+    const newDriverId = `DRV-${Date.now().toString().slice(-4)}`;
+
+    const newDriverProfile: DriverInfo = {
+      id: newDriverId,
+      name: data.fullName,
+      phone: data.phone,
+      photo: data.documents?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      vehicle: `${data.brand || 'Honda'} ${data.model || '150'} (${data.vehicleType})`,
+      plate: data.plate || 'PENDIENTE',
+      rating: 5.0,
+      completedTrips: 0,
+      lat: -9.9306,
+      lng: -76.2422,
+      status: 'disponible',
+    };
+
+    const newDriverUser: AppUser = {
+      id: `USR-${newDriverId}`,
+      name: data.fullName,
+      dni: data.dni,
+      email: data.email,
+      phone: data.phone,
+      address: data.address,
+      birthDate: data.birthDate,
+      role: 'driver',
+      driverProfileId: newDriverId,
+      driverStatus: 'APROBADO',
+      vehicleInfo: {
+        type: data.vehicleType,
+        brand: data.brand || 'Honda',
+        model: data.model,
+        year: data.year || '2023',
+        plate: data.plate,
+      },
+      createdAt: 'Hoy',
+      avatar: newDriverProfile.photo,
+    };
+
+    setDrivers((prev) => [...prev, newDriverProfile]);
+    setUsers((prev) => [...prev, newDriverUser]);
+    setCurrentUser(newDriverUser);
+    setRole('driver');
+    setActiveDriverId(newDriverId);
+    navigateTo('/repartidor');
+
+    return {
+      success: true,
+      message: 'Cuenta de repartidor creada exitosamente.',
+      user: newDriverUser,
+    };
+  };
+
+  const updateDriverAdminStatus = (driverId: string, status: DriverStatusState) => {
+    setDrivers((prev) => prev.map((d) => (d.id === driverId ? { ...d, adminStatus: status } : d)));
+  };
+
+  const updateDriverCommissionRate = (driverId: string, rate: number) => {
+    setCommissionConfig((prev) => ({
+      ...prev,
+      driverCustomRates: {
+        ...(prev.driverCustomRates || {}),
+        [driverId]: rate,
+      },
+    }));
+  };
+
+  const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
+    setAuthModalTab(tab);
+    setAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => setAuthModalOpen(false);
+
+  const submitForgotPassword = (email: string) => ({
+    success: true,
+    message: `Se ha enviado el enlace de restablecimiento a: ${email}`,
+  });
+
+  const requestWithdrawal = (amount: number, destAccount: string): boolean => {
+    if (amount <= 0 || amount > wallet.balance) return false;
+    setWallet((prev) => ({
+      balance: Math.round((prev.balance - amount) * 10) / 10,
+      transactions: [
+        {
+          id: `TXN-${Date.now().toString().slice(-4)}`,
+          type: 'withdrawal',
+          title: `Retiro a ${destAccount}`,
+          amount: -amount,
+          date: 'Hoy ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'completado',
+        },
+        ...prev.transactions,
+      ],
+    }));
+    return true;
+  };
+
+  const openChatModal = (orderId: string, senderRole: 'client' | 'driver' = 'client') => {
+    setActiveChatOrderId(orderId);
+    setChatSenderRole(senderRole);
+  };
+
+  const closeChatModal = () => setActiveChatOrderId(null);
+
+  const sendChatMessage = (orderId: string, text: string, sender: 'client' | 'driver') => {
+    const newMessage = {
+      id: `MSG-${Date.now()}`,
+      sender,
+      senderName: sender === 'client' ? (currentUser?.name || 'Cliente') : 'Repartidor',
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          chatMessages: [...(o.chatMessages || []), newMessage],
+        };
+        syncOrderToSupabase(updated);
+        return updated;
+      })
+    );
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        role,
+        setRole,
+        currentRoute,
+        navigateTo,
+        currentUser,
+        users,
+        clients,
+        login,
+        registerClient,
+        registerDriver,
+        logout,
+        updateDriverAdminStatus,
+        updateDriverCommissionRate,
+        authModalOpen,
+        authModalTab,
+        openAuthModal,
+        closeAuthModal,
+        submitForgotPassword,
+        isClientProfileOpen,
+        setIsClientProfileOpen,
+        orders,
+        drivers,
+        applications,
+        commissionConfig,
+        activeClientOrderId,
+        setActiveClientOrderId,
+        activeDriverId,
+        setActiveDriverId,
+        driverOnline,
+        setDriverOnline,
+        wallet,
+        createOrder,
+        updateOrderStatus,
+        acceptOrderAsDriver,
+        acceptProposedPriceAsDriver,
+        submitCounterOffer,
+        ignoreOrderAsDriver,
+        clientAcceptOffer,
+        clientRejectOffer,
+        updateProposedPrice,
+        verifyYapePayment,
+        submitDriverApplication,
+        updateApplicationStatus,
+        updateCommissionConfig,
+        requestWithdrawal,
+        calculateFare,
+        openRegistrationModal,
+        setOpenRegistrationModal,
+        openWhatsAppModal,
+        setOpenWhatsAppModal,
+        activeChatOrderId,
+        chatSenderRole,
+        openChatModal,
+        closeChatModal,
+        sendChatMessage,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
