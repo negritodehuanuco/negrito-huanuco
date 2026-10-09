@@ -19,6 +19,7 @@ import {
   INITIAL_USERS,
   INITIAL_WALLET_TRANSACTIONS
 } from '../data/mockData';
+import { supabase } from '../supabase';
 
 export type UserRole = 'client' | 'driver' | 'admin';
 
@@ -122,10 +123,9 @@ const setStored = <T,>(key: string, value: T) => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
-    // Notificar a otros listeners en la misma pestaña
     window.dispatchEvent(new Event('ndh_storage_sync'));
   } catch {
-    // Manejo seguro de cuota
+    // Manejo de cuota
   }
 };
 
@@ -152,7 +152,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(getInitialRoute);
 
-  // Estados persistentes centralizados
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() =>
     getStored<AppUser | null>('ndh_currentUser', null)
   );
@@ -186,7 +185,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     getStored('ndh_wallet', { balance: 0, transactions: INITIAL_WALLET_TRANSACTIONS })
   );
 
-  // Estados de sesión UI
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isClientProfileOpen, setIsClientProfileOpen] = useState<boolean>(false);
@@ -206,6 +204,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [openWhatsAppModal, setOpenWhatsAppModal] = useState<boolean>(false);
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | null>(null);
   const [chatSenderRole, setChatSenderRole] = useState<'client' | 'driver'>('client');
+
+  // Integración Supabase: Carga inicial y escucha en Tiempo Real
+  useEffect(() => {
+    const fetchSupabaseOrders = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.warn('Nota de Supabase al leer pedidos:', error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const parsedOrders: Order[] = data.map((row: any) => ({
+            ...(row.payload || row),
+            id: row.id || row.payload?.id,
+            status: row.status || row.payload?.status || 'recibido',
+          }));
+
+          setOrders((prev) => {
+            const combinedMap = new Map<string, Order>();
+            prev.forEach((o) => combinedMap.set(o.id, o));
+            parsedOrders.forEach((o) => combinedMap.set(o.id, o));
+            return Array.from(combinedMap.values());
+          });
+        }
+      } catch (err) {
+        console.error('Error sincronizando con Supabase:', err);
+      }
+    };
+
+    fetchSupabaseOrders();
+
+    // Suscripción Realtime a cambios en la tabla 'orders'
+    const channel = supabase
+      .channel('realtime_orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newRow = payload.new;
+            const newOrder: Order = newRow.payload || newRow;
+            setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrder.id)]);
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedRow = payload.new;
+            const updatedOrder: Order = updatedRow.payload || updatedRow;
+            setOrders((prev) =>
+              prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old.id;
+            setOrders((prev) => prev.filter((o) => o.id !== deletedId));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Helper para persistir orden remota en Supabase
+  const syncOrderToSupabase = async (order: Order) => {
+    try {
+      await supabase.from('orders').upsert({
+        id: order.id,
+        status: order.status,
+        payload: order,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('No se pudo guardar la orden en Supabase:', e);
+    }
+  };
 
   // Sincronización continua de localStorage
   useEffect(() => {
@@ -335,7 +412,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const rawServicePrice = Math.max(minFare, base + distanceKm * kmRate + typeExtra);
     const servicePrice = Math.round(rawServicePrice * 10) / 10;
 
-    // 20% retenido para la empresa, 80% neto para el repartidor
     const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
     const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
     const total = servicePrice + (estimatedCost || 0);
@@ -350,12 +426,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  // Creación de pedidos por clientes
+  // Creación de pedidos
   const createOrder = (newOrderData: Omit<Order, 'id' | 'createdAt' | 'status'>): Order => {
     const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
     const newId = `HX-${randomHex}`;
 
-    // Garantizar cálculo 20% / 80%
     const servicePrice = newOrderData.pricing.servicePrice;
     const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
     const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
@@ -380,6 +455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders((prev) => [newOrder, ...prev]);
     setActiveClientOrderId(newId);
+    syncOrderToSupabase(newOrder);
     return newOrder;
   };
 
@@ -394,7 +470,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           deliveryNote: note || order.deliveryNote,
         };
 
-        // Si el pedido es entregado, acreditar el 80% al repartidor
         if (status === 'entregado') {
           const earnings = order.pricing?.driverEarnings || order.payment?.driverEarnings || Math.round(order.pricing.servicePrice * 0.8 * 10) / 10;
 
@@ -414,7 +489,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ],
           }));
 
-          // Incrementar contador del repartidor
           if (order.driver?.id) {
             setDrivers((dList) =>
               dList.map((d) =>
@@ -424,6 +498,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
+        syncOrderToSupabase(updatedOrder);
         return updatedOrder;
       })
     );
@@ -446,15 +521,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              driver: foundDriver,
-              status: 'asignado',
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          driver: foundDriver,
+          status: 'asignado' as const,
+        };
+        syncOrderToSupabase(updated);
+        return updated;
+      })
     );
   };
 
@@ -480,24 +556,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const offerId = `OFF-${Date.now().toString().slice(-4)}`;
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              counterOffers: [
-                ...(o.counterOffers || []),
-                {
-                  id: offerId,
-                  driver: foundDriver,
-                  counterPrice,
-                  etaMinutes,
-                  status: 'pendiente',
-                  timestamp: 'Justo ahora',
-                },
-              ],
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          counterOffers: [
+            ...(o.counterOffers || []),
+            {
+              id: offerId,
+              driver: foundDriver,
+              counterPrice,
+              etaMinutes,
+              status: 'pendiente' as const,
+              timestamp: 'Justo ahora',
+            },
+          ],
+        };
+        syncOrderToSupabase(updated);
+        return updated;
+      })
     );
   };
 
@@ -526,9 +603,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const platformFee = Math.round(newFare * 0.20 * 10) / 10;
         const driverEarnings = Math.max(0, Math.round((newFare - platformFee) * 10) / 10);
 
-        return {
+        const updated = {
           ...o,
-          status: 'asignado',
+          status: 'asignado' as const,
           driver: offer.driver,
           payment: {
             ...o.payment,
@@ -538,25 +615,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             driverEarnings,
           },
           counterOffers: o.counterOffers?.map((off) =>
-            off.id === offerId ? { ...off, status: 'aceptada' } : { ...off, status: 'rechazada' }
+            off.id === offerId ? { ...off, status: 'aceptada' as const } : { ...off, status: 'rechazada' as const }
           ),
         };
+        syncOrderToSupabase(updated);
+        return updated;
       })
     );
   };
 
   const clientRejectOffer = (orderId: string, offerId: string) => {
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              counterOffers: o.counterOffers?.map((off) =>
-                off.id === offerId ? { ...off, status: 'rechazada' } : off
-              ),
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          counterOffers: o.counterOffers?.map((off) =>
+            off.id === offerId ? { ...off, status: 'rechazada' as const } : off
+          ),
+        };
+        syncOrderToSupabase(updated);
+        return updated;
+      })
     );
   };
 
@@ -566,7 +646,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (o.id !== orderId) return o;
         const platformFee = Math.round(newPrice * 0.20 * 10) / 10;
         const driverEarnings = Math.max(0, Math.round((newPrice - platformFee) * 10) / 10);
-        return {
+        const updated = {
           ...o,
           payment: {
             ...o.payment,
@@ -576,24 +656,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             driverEarnings,
           },
         };
+        syncOrderToSupabase(updated);
+        return updated;
       })
     );
   };
 
   const verifyYapePayment = (orderId: string) => {
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              payment: {
-                ...o.payment,
-                isVerified: true,
-                paymentStatus: 'pagado',
-              },
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updated = {
+          ...o,
+          payment: {
+            ...o.payment,
+            isVerified: true,
+            paymentStatus: 'pagado' as const,
+          },
+        };
+        syncOrderToSupabase(updated);
+        return updated;
+      })
     );
   };
 
@@ -609,7 +692,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newApp;
   };
 
-  // Aprobación de repartidor por el Administrador
+  // Aprobación de repartidor
   const updateApplicationStatus = (appId: string, status: 'APROBADO' | 'RECHAZADO') => {
     setApplications((prev) =>
       prev.map((a) => (a.id === appId ? { ...a, status } : a))
@@ -656,314 +739,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCommissionConfig((prev) => ({ ...prev, ...newConfig }));
   };
 
-  // Autenticación independiente y privada
+  // Autenticación
   const login = (email: string, password?: string, intendedRole?: UserRole) => {
     const cleanEmail = email.trim().toLowerCase();
 
-    // Verificación de credenciales de Dueño / Admin
     if (cleanEmail === 'maycolconde13@gmail.com' && password === 'shongmaycolriveracode') {
       const adminUser: AppUser = {
         id: 'USR-ADMIN-01',
-        name: 'Administrador General',
-        phone: '976 387 226',
-        email: 'maycolconde13@gmail.com',
-        role: 'admin',
-        createdAt: '2025',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-      };
-      setCurrentUser(adminUser);
-      setRole('admin');
-      navigateTo('/admin');
-      return { success: true };
-    }
-
-    // Verificación de repartidor
-    let found = users.find((u) => u.email.toLowerCase() === cleanEmail);
-    if (!found && intendedRole === 'driver') {
-      return {
-        success: false,
-        message: 'No existe una cuenta de repartidor registrada con este correo. Por favor postula o regístrate en "Quiero ser repartidor".',
-      };
-    }
-
-    if (!found) {
-      // Cliente nuevo o existente
-      found = {
-        id: `USR-${Date.now()}`,
-        name: cleanEmail.split('@')[0],
-        email: cleanEmail,
-        phone: '962 000 000',
-        role: intendedRole || 'client',
-        createdAt: 'Hoy',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      };
-      setUsers((prev) => [...prev, found!]);
-    }
-
-    if (intendedRole && found.role !== intendedRole) {
-      return {
-        success: false,
-        message: `Esta cuenta no tiene permisos para ingresar al área de ${intendedRole}.`,
-      };
-    }
-
-    setCurrentUser(found);
-    setRole(found.role);
-    if (found.driverProfileId) {
-      setActiveDriverId(found.driverProfileId);
-    }
-
-    if (found.role === 'admin') {
-      navigateTo('/admin');
-    } else if (found.role === 'driver') {
-      navigateTo('/repartidor');
-    } else {
-      navigateTo('/');
-    }
-
-    return { success: true };
-  };
-
-  const logout = () => {
-    setCurrentUser(null);
-    setRole('client');
-    navigateTo('/');
-  };
-
-  const registerClient = (data: { name: string; email: string; phone: string; address?: string }) => {
-    const newUser: AppUser = {
-      id: `CLI-${Date.now()}`,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address || 'Huánuco',
-      role: 'client',
-      createdAt: 'Hoy',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-    };
-    setUsers((prev) => [...prev, newUser]);
-    setClients((prev) => [
-      {
-        id: newUser.id,
-        name: newUser.name,
-        phone: newUser.phone,
-        email: newUser.email,
-        address: newUser.address || 'Huánuco',
-        totalOrders: 0,
-        registeredAt: 'Hoy',
-        status: 'ACTIVO',
-      },
-      ...prev,
-    ]);
-    setCurrentUser(newUser);
-    setRole('client');
-    return { success: true, user: newUser };
-  };
-
-  const registerDriver = (data: any) => {
-    const newApp = submitDriverApplication(data);
-    const newDriverId = `DRV-${Date.now().toString().slice(-4)}`;
-
-    const newDriverProfile: DriverInfo = {
-      id: newDriverId,
-      name: data.fullName,
-      phone: data.phone,
-      photo: data.documents?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      vehicle: `${data.brand || 'Honda'} ${data.model || '150'} (${data.vehicleType})`,
-      plate: data.plate || 'PENDIENTE',
-      rating: 5.0,
-      completedTrips: 0,
-      lat: -9.9306,
-      lng: -76.2422,
-      status: 'disponible',
-    };
-
-    const newDriverUser: AppUser = {
-      id: `USR-${newDriverId}`,
-      name: data.fullName,
-      dni: data.dni,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      birthDate: data.birthDate,
-      role: 'driver',
-      driverProfileId: newDriverId,
-      driverStatus: 'APROBADO',
-      vehicleInfo: {
-        type: data.vehicleType,
-        brand: data.brand || 'Honda',
-        model: data.model,
-        year: data.year || '2023',
-        plate: data.plate,
-      },
-      createdAt: 'Hoy',
-      avatar: newDriverProfile.photo,
-    };
-
-    setDrivers((prev) => [...prev, newDriverProfile]);
-    setUsers((prev) => [...prev, newDriverUser]);
-    setCurrentUser(newDriverUser);
-    setRole('driver');
-    setActiveDriverId(newDriverId);
-    navigateTo('/repartidor');
-
-    return {
-      success: true,
-      message: 'Cuenta de repartidor creada exitosamente.',
-      user: newDriverUser,
-    };
-  };
-
-  const updateDriverAdminStatus = (driverId: string, status: DriverStatusState) => {
-    setDrivers((prev) =>
-      prev.map((d) => (d.id === driverId ? { ...d, adminStatus: status } : d))
-    );
-  };
-
-  const updateDriverCommissionRate = (driverId: string, rate: number) => {
-    setCommissionConfig((prev) => ({
-      ...prev,
-      driverCustomRates: {
-        ...(prev.driverCustomRates || {}),
-        [driverId]: rate,
-      },
-    }));
-  };
-
-  const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
-    setAuthModalTab(tab);
-    setAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setAuthModalOpen(false);
-  };
-
-  const submitForgotPassword = (email: string) => {
-    return {
-      success: true,
-      message: `Se ha enviado el enlace de restablecimiento a: ${email}`,
-    };
-  };
-
-  const requestWithdrawal = (amount: number, destAccount: string): boolean => {
-    if (amount <= 0 || amount > wallet.balance) return false;
-    setWallet((prev) => ({
-      balance: Math.round((prev.balance - amount) * 10) / 10,
-      transactions: [
-        {
-          id: `TXN-${Date.now().toString().slice(-4)}`,
-          type: 'withdrawal',
-          title: `Retiro a ${destAccount}`,
-          amount: -amount,
-          date: 'Hoy ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'completado',
-        },
-        ...prev.transactions,
-      ],
-    }));
-    return true;
-  };
-
-  const openChatModal = (orderId: string, senderRole: 'client' | 'driver' = 'client') => {
-    setActiveChatOrderId(orderId);
-    setChatSenderRole(senderRole);
-  };
-
-  const closeChatModal = () => {
-    setActiveChatOrderId(null);
-  };
-
-  const sendChatMessage = (orderId: string, text: string, sender: 'client' | 'driver') => {
-    const newMessage = {
-      id: `MSG-${Date.now()}`,
-      sender,
-      senderName: sender === 'client' ? (currentUser?.name || 'Cliente') : 'Repartidor',
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              chatMessages: [...(o.chatMessages || []), newMessage],
-            }
-          : o
-      )
-    );
-  };
-
-  return (
-    <AppContext.Provider
-      value={{
-        role,
-        setRole,
-        currentRoute,
-        navigateTo,
-        currentUser,
-        users,
-        clients,
-        login,
-        registerClient,
-        registerDriver,
-        logout,
-        updateDriverAdminStatus,
-        updateDriverCommissionRate,
-        authModalOpen,
-        authModalTab,
-        openAuthModal,
-        closeAuthModal,
-        submitForgotPassword,
-        isClientProfileOpen,
-        setIsClientProfileOpen,
-        orders,
-        drivers,
-        applications,
-        commissionConfig,
-        activeClientOrderId,
-        setActiveClientOrderId,
-        activeDriverId,
-        setActiveDriverId,
-        driverOnline,
-        setDriverOnline,
-        wallet,
-        createOrder,
-        updateOrderStatus,
-        acceptOrderAsDriver,
-        acceptProposedPriceAsDriver,
-        submitCounterOffer,
-        ignoreOrderAsDriver,
-        clientAcceptOffer,
-        clientRejectOffer,
-        updateProposedPrice,
-        verifyYapePayment,
-        submitDriverApplication,
-        updateApplicationStatus,
-        updateCommissionConfig,
-        requestWithdrawal,
-        calculateFare,
-        openRegistrationModal,
-        setOpenRegistrationModal,
-        openWhatsAppModal,
-        setOpenWhatsAppModal,
-        activeChatOrderId,
-        chatSenderRole,
-        openChatModal,
-        closeChatModal,
-        sendChatMessage,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
-};
-
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
-};
