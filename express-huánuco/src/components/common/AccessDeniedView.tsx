@@ -9,7 +9,7 @@ interface AccessDeniedViewProps {
 export const AccessDeniedView: React.FC<AccessDeniedViewProps> = ({ attemptedArea }) => {
   const { currentUser, navigateTo, logout, login } = useApp();
 
-  const areaTitle = attemptedArea === 'admin' ? 'Consola Administrativa (/administracion)' : 'Portal de Repartidores (/repartidores)';
+  const areaTitle = attemptedArea === 'admin' ? 'Panel de Dueño / Admin (/admin)' : 'Portal de Repartidores (/repartidor)';
   const requiredRole = attemptedArea === 'admin' ? 'ADMINISTRADOR' : 'REPARTIDOR';
 
   return (
@@ -47,13 +47,13 @@ export const AccessDeniedView: React.FC<AccessDeniedViewProps> = ({ attemptedAre
             <button
               type="button"
               onClick={() => {
-                login('admin@negritodehuanuco.com', '123456', 'admin');
-                navigateTo('/administracion');
+                logout();
+                navigateTo('/admin');
               }}
               className="w-full py-3.5 px-4 bg-black hover:bg-neutral-900 text-white font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg border border-red-600 transition-all cursor-pointer"
             >
               <ShieldCheck className="w-4 h-4 text-red-500" />
-              <span>Ver Panel como Dueño / Administrador (HQ)</span>
+              <span>Iniciar Sesión en Panel de Dueño / Admin</span>
             </button>
           )}
 
@@ -61,13 +61,13 @@ export const AccessDeniedView: React.FC<AccessDeniedViewProps> = ({ attemptedAre
             <button
               type="button"
               onClick={() => {
-                login('carlos.mendoza@negritodehuanuco.com', '123456', 'driver');
-                navigateTo('/repartidores');
+                logout();
+                navigateTo('/repartidor');
               }}
               className="w-full py-3.5 px-4 bg-black hover:bg-neutral-900 text-white font-extrabold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg border border-red-600 transition-all cursor-pointer"
             >
               <Bike className="w-4 h-4 text-red-500" />
-              <span>Ver Portal como Repartidor Activo (Carlos Mendoza)</span>
+              <span>Iniciar Sesión en Portal de Repartidores (/repartidor)</span>
             </button>
           )}
 

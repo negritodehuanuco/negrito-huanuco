@@ -29,11 +29,7 @@ export const ClientHome: React.FC<ClientHomeProps> = ({
   onStartOrder,
   onOpenTracking,
 }) => {
-  const { orders, activeClientOrderId, setOpenRegistrationModal, setOpenWhatsAppModal } = useApp();
-
-  const activeOrder = orders.find(
-    (o) => o.id === activeClientOrderId && o.status !== 'entregado' && o.status !== 'cancelado'
-  );
+  const { setOpenRegistrationModal, setOpenWhatsAppModal } = useApp();
 
   const scrollToTransport = () => {
     const el = document.getElementById('seccion-transporte');
@@ -44,40 +40,6 @@ export const ClientHome: React.FC<ClientHomeProps> = ({
 
   return (
     <div className="space-y-8 pb-16">
-      {/* Active Order Banner if existing */}
-      {activeOrder && (
-        <div className="bg-slate-900 text-white p-4 rounded-3xl border border-amber-500/40 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-              <Bike className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full uppercase">
-                  En curso
-                </span>
-                <span className="font-mono text-xs text-slate-300">Pedido {activeOrder.id}</span>
-              </div>
-              <div className="text-sm font-extrabold text-white mt-0.5">
-                Estado: <span className="text-amber-400 capitalize">{activeOrder.status.replace('_', ' ')}</span>
-              </div>
-              <div className="text-xs text-slate-400 truncate max-w-xs">
-                Destino: {activeOrder.destination.address}
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onOpenTracking(activeOrder.id)}
-            className="w-full sm:w-auto px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors shrink-0 shadow-md"
-          >
-            <span>Ver Seguimiento en Vivo</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Hero Section */}
       <div className="relative bg-black rounded-3xl p-6 sm:p-10 border-2 border-red-600/30 overflow-hidden text-white shadow-xl">
         {/* Subtle decorative circles */}

@@ -11,11 +11,11 @@ import {
   WalletTransaction
 } from '../types';
 import {
-  INITIAL_APPLICATIONS,
-  INITIAL_CLIENTS,
   INITIAL_CONFIG,
   INITIAL_DRIVERS,
   INITIAL_ORDERS,
+  INITIAL_APPLICATIONS,
+  INITIAL_CLIENTS,
   INITIAL_USERS,
   INITIAL_WALLET_TRANSACTIONS
 } from '../data/mockData';
@@ -24,17 +24,13 @@ export type UserRole = 'client' | 'driver' | 'admin';
 
 export type AppRoute =
   | '/'
+  | '/repartidor'
   | '/repartidores'
-  | '/repartidores/registro'
+  | '/admin'
   | '/administracion'
   | '/administración'
-  | '/visualizacion'
   | '/cliente'
-  | '/delivery'
-  | '/delivery/registro'
-  | '/repartidor'
-  | '/repartidor/registro'
-  | '/admin';
+  | '/visualizacion';
 
 interface AppContextType {
   role: UserRole;
@@ -71,7 +67,7 @@ interface AppContextType {
     balance: number;
     transactions: WalletTransaction[];
   };
-  // Actions
+  // Acciones
   createOrder: (newOrder: Omit<Order, 'id' | 'createdAt' | 'status'>) => Order;
   updateOrderStatus: (orderId: string, status: OrderStatus, note?: string) => void;
   acceptOrderAsDriver: (orderId: string, driverId?: string) => void;
@@ -111,6 +107,28 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Helper para persistencia local sincronizada
+const getStored = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const item = window.localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const setStored = <T,>(key: string, value: T) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    // Notificar a otros listeners en la misma pestaña
+    window.dispatchEvent(new Event('ndh_storage_sync'));
+  } catch {
+    // Manejo seguro de cuota
+  }
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const getInitialRoute = (): AppRoute => {
     if (typeof window !== 'undefined') {
@@ -118,12 +136,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = decodeURIComponent(window.location.hash).toLowerCase().trim().replace(/^#\/?/, '');
       const path = (pathname !== '/' && pathname !== '') ? pathname.replace(/^\//, '') : hash;
 
-      if (path.startsWith('administra') || path.startsWith('admin')) {
-        return '/administracion';
+      if (path.startsWith('admin') || path.startsWith('administra')) {
+        return '/admin';
       }
-      if (path.startsWith('repartidor') || path.startsWith('delivery')) {
-        if (path.includes('registro')) return '/repartidores/registro';
-        return '/repartidores';
+      if (path.startsWith('repartidor')) {
+        return '/repartidor';
       }
       if (path.startsWith('visualizacion')) {
         return '/visualizacion';
@@ -134,575 +151,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(getInitialRoute);
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(INITIAL_USERS[3]);
-  const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
-  const [clients, setClients] = useState<ClientProfile[]>(INITIAL_CLIENTS);
 
+  // Estados persistentes centralizados
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() =>
+    getStored<AppUser | null>('ndh_currentUser', null)
+  );
+
+  const [users, setUsers] = useState<AppUser[]>(() =>
+    getStored<AppUser[]>('ndh_users', INITIAL_USERS)
+  );
+
+  const [clients, setClients] = useState<ClientProfile[]>(() =>
+    getStored<ClientProfile[]>('ndh_clients', INITIAL_CLIENTS)
+  );
+
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const list = getStored<Order[]>('ndh_orders', INITIAL_ORDERS);
+    return list.filter((o) => o.id !== 'HX-8F42K');
+  });
+
+  const [drivers, setDrivers] = useState<DriverInfo[]>(() => {
+    const list = getStored<DriverInfo[]>('ndh_drivers', INITIAL_DRIVERS);
+    return list.filter((d) => !['DRV-101', 'DRV-102', 'DRV-103', 'DRV-01', 'DRV-02'].includes(d.id));
+  });
+
+  const [applications, setApplications] = useState<DriverApplication[]>(() =>
+    getStored<DriverApplication[]>('ndh_applications', INITIAL_APPLICATIONS)
+  );
+
+  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(() =>
+    getStored<CommissionConfig>('ndh_config', INITIAL_CONFIG)
+  );
+
+  const [wallet, setWallet] = useState<{ balance: number; transactions: WalletTransaction[] }>(() =>
+    getStored('ndh_wallet', { balance: 0, transactions: INITIAL_WALLET_TRANSACTIONS })
+  );
+
+  // Estados de sesión UI
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isClientProfileOpen, setIsClientProfileOpen] = useState<boolean>(false);
+  const [role, setRole] = useState<UserRole>(() => currentUser?.role || 'client');
 
-  const [role, setRole] = useState<UserRole>('admin');
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
-  const [drivers, setDrivers] = useState<DriverInfo[]>(INITIAL_DRIVERS);
-  const [applications, setApplications] = useState<DriverApplication[]>(INITIAL_APPLICATIONS);
-  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig>(INITIAL_CONFIG);
-  const [activeClientOrderId, setActiveClientOrderId] = useState<string | null>('HX-8F42K');
-  const [activeDriverId, setActiveDriverId] = useState<string>('DRV-101');
+  const [activeClientOrderId, setActiveClientOrderId] = useState<string | null>(() => {
+    const val = getStored<string | null>('ndh_activeClientOrderId', null);
+    return val === 'HX-8F42K' ? null : val;
+  });
+
+  const [activeDriverId, setActiveDriverId] = useState<string>(() =>
+    currentUser?.driverProfileId || ''
+  );
+
   const [driverOnline, setDriverOnline] = useState<boolean>(true);
   const [openRegistrationModal, setOpenRegistrationModal] = useState<boolean>(false);
   const [openWhatsAppModal, setOpenWhatsAppModal] = useState<boolean>(false);
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | null>(null);
   const [chatSenderRole, setChatSenderRole] = useState<'client' | 'driver'>('client');
 
-  const [wallet, setWallet] = useState({
-    balance: 88.5,
-    transactions: INITIAL_WALLET_TRANSACTIONS,
-  });
+  // Sincronización continua de localStorage
+  useEffect(() => {
+    setStored('ndh_orders', orders);
+  }, [orders]);
 
-  const calculateFare = (distanceKm: number, serviceType: string, estimatedCost = 0, transportVehicle?: 'moto' | 'mototaxi') => {
-    let base = commissionConfig.baseFare;
-    let kmRate = commissionConfig.perKmFare;
-    
-    // Type multipliers or additions
-    let typeExtra = 0;
-    if (serviceType === 'compra') typeExtra = 2.0;
-    if (serviceType === 'otro') typeExtra = 3.0;
-    if (serviceType === 'transporte') {
-      if (transportVehicle === 'moto') {
-        base = Math.max(4.0, commissionConfig.baseFare - 1.0);
-        kmRate = 1.2;
-      } else {
-        // mototaxi
-        base = Math.max(5.0, commissionConfig.baseFare);
-        kmRate = 1.4;
-      }
-    }
+  useEffect(() => {
+    setStored('ndh_drivers', drivers);
+  }, [drivers]);
 
-    const minFare = serviceType === 'transporte' && transportVehicle === 'moto' ? 4.0 : commissionConfig.minimumFare;
-    const rawServicePrice = Math.max(minFare, base + (distanceKm * kmRate) + typeExtra);
-    const servicePrice = Math.round(rawServicePrice * 10) / 10;
-    
-    // Commission calculation
-    let platformFee = 0;
-    if (commissionConfig.type === 'percentage') {
-      platformFee = Math.round((servicePrice * (commissionConfig.percentageValue / 100)) * 10) / 10;
-    } else {
-      platformFee = commissionConfig.fixedValue;
-    }
+  useEffect(() => {
+    setStored('ndh_applications', applications);
+  }, [applications]);
 
-    const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
-    const total = servicePrice + (estimatedCost || 0);
-    const estimatedMinutes = Math.max(6, Math.round(distanceKm * 3.5 + 4));
+  useEffect(() => {
+    setStored('ndh_users', users);
+  }, [users]);
 
-    return {
-      servicePrice,
-      platformFee,
-      driverEarnings,
-      total,
-      estimatedMinutes,
-    };
-  };
+  useEffect(() => {
+    setStored('ndh_clients', clients);
+  }, [clients]);
 
-  const createOrder = (newOrderData: Omit<Order, 'id' | 'createdAt' | 'status'>): Order => {
-    const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const newId = `HX-${randomHex}`;
-    
-    const newOrder: Order = {
-      ...newOrderData,
-      id: newId,
-      createdAt: 'Justo ahora',
-      status: 'recibido',
+  useEffect(() => {
+    setStored('ndh_currentUser', currentUser);
+  }, [currentUser]);
+
+  useEffect(() => {
+    setStored('ndh_wallet', wallet);
+  }, [wallet]);
+
+  useEffect(() => {
+    setStored('ndh_config', commissionConfig);
+  }, [commissionConfig]);
+
+  useEffect(() => {
+    setStored('ndh_activeClientOrderId', activeClientOrderId);
+  }, [activeClientOrderId]);
+
+  // Escucha cambios de almacenamiento (otra pestaña o ventana)
+  useEffect(() => {
+    const handleSync = () => {
+      setOrders(getStored<Order[]>('ndh_orders', []).filter((o) => o.id !== 'HX-8F42K'));
+      setDrivers(getStored<DriverInfo[]>('ndh_drivers', []).filter((d) => !['DRV-101', 'DRV-102', 'DRV-103', 'DRV-01', 'DRV-02'].includes(d.id)));
+      setApplications(getStored('ndh_applications', []));
+      setUsers(getStored('ndh_users', INITIAL_USERS));
+      setClients(getStored('ndh_clients', []));
+      setWallet(getStored('ndh_wallet', { balance: 0, transactions: [] }));
+      setCommissionConfig(getStored('ndh_config', INITIAL_CONFIG));
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
-    setActiveClientOrderId(newId);
-
-    // If order has bidding negotiation active, trigger simulated driver responses
-    if (newOrder.negotiation?.status === 'bidding') {
-      const propPrice = newOrder.negotiation.proposedPrice;
-
-      // Offer 1: Juan Quispe accepts client's exact proposed price after 2.5s
-      setTimeout(() => {
-        setOrders((current) =>
-          current.map((o) => {
-            if (o.id !== newId || o.negotiation?.status !== 'bidding') return o;
-            const existingOffers = o.negotiation?.offers || [];
-            if (existingOffers.some((off) => off.driverId === 'DRV-104')) return o;
-            return {
-              ...o,
-              negotiation: {
-                ...o.negotiation!,
-                offers: [
-                  ...existingOffers,
-                  {
-                    id: `OFF-${Date.now()}-1`,
-                    driverId: 'DRV-104',
-                    driverName: 'Juan Quispe Morales',
-                    driverPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-                    driverRating: 4.9,
-                    vehicleType: (newOrder.details.transportVehicle === 'mototaxi' ? 'mototaxi' : 'moto') as 'moto' | 'mototaxi',
-                    vehicleInfo: newOrder.details.transportVehicle === 'mototaxi' ? 'Bajaj RE Torito (Azul)' : 'Honda Wave 110',
-                    offeredPrice: propPrice,
-                    isClientPriceAccepted: true,
-                    etaMinutes: 5,
-                    createdAt: 'Justo ahora',
-                  },
-                ],
-              },
-            };
-          })
-        );
-      }, 2500);
-
-      // Offer 2: Carlos Mendoza sends a slight counteroffer (+S/ 1.00) after 5s
-      setTimeout(() => {
-        setOrders((current) =>
-          current.map((o) => {
-            if (o.id !== newId || o.negotiation?.status !== 'bidding') return o;
-            const existingOffers = o.negotiation?.offers || [];
-            if (existingOffers.some((off) => off.driverId === 'DRV-101')) return o;
-            return {
-              ...o,
-              negotiation: {
-                ...o.negotiation!,
-                offers: [
-                  ...existingOffers,
-                  {
-                    id: `OFF-${Date.now()}-2`,
-                    driverId: 'DRV-101',
-                    driverName: 'Carlos Mendoza Rojas',
-                    driverPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-                    driverRating: 4.9,
-                    vehicleType: 'moto',
-                    vehicleInfo: 'Honda GLH 150 (Negra)',
-                    offeredPrice: propPrice + 1.0,
-                    isClientPriceAccepted: false,
-                    etaMinutes: 4,
-                    createdAt: 'Justo ahora',
-                  },
-                ],
-              },
-            };
-          })
-        );
-      }, 5000);
-
-      // Offer 3: Luis Alvarado sends another offer (+S/ 0.50) after 7.5s
-      setTimeout(() => {
-        setOrders((current) =>
-          current.map((o) => {
-            if (o.id !== newId || o.negotiation?.status !== 'bidding') return o;
-            const existingOffers = o.negotiation?.offers || [];
-            if (existingOffers.some((off) => off.driverId === 'DRV-105')) return o;
-            return {
-              ...o,
-              negotiation: {
-                ...o.negotiation!,
-                offers: [
-                  ...existingOffers,
-                  {
-                    id: `OFF-${Date.now()}-3`,
-                    driverId: 'DRV-105',
-                    driverName: 'Luis Alvarado Cerna',
-                    driverPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-                    driverRating: 4.8,
-                    vehicleType: 'mototaxi',
-                    vehicleInfo: 'Bajaj RE Torito (Rojo)',
-                    offeredPrice: Math.max(propPrice, propPrice + 0.5),
-                    isClientPriceAccepted: false,
-                    etaMinutes: 7,
-                    createdAt: 'Justo ahora',
-                  },
-                ],
-              },
-            };
-          })
-        );
-      }, 7500);
-    }
-
-    return newOrder;
-  };
-
-  const acceptProposedPriceAsDriver = (orderId: string, driverId = activeDriverId) => {
-    const currentDriver = drivers.find((d) => d.id === driverId) || drivers[0];
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const proposed = ord.negotiation?.proposedPrice || ord.pricing.servicePrice;
-        const existingOffers = ord.negotiation?.offers || [];
-        const isMototaxi = currentDriver.vehicle.toLowerCase().includes('torito') || currentDriver.vehicle.toLowerCase().includes('mototaxi');
-
-        const newOffer = {
-          id: `OFF-${Date.now()}`,
-          driverId: currentDriver.id,
-          driverName: currentDriver.name,
-          driverPhoto: currentDriver.photo,
-          driverRating: currentDriver.rating,
-          vehicleType: (isMototaxi ? 'mototaxi' : 'moto') as 'moto' | 'mototaxi',
-          vehicleInfo: currentDriver.vehicle,
-          offeredPrice: proposed,
-          isClientPriceAccepted: true,
-          etaMinutes: 5,
-          createdAt: 'Justo ahora',
-        };
-
-        return {
-          ...ord,
-          negotiation: {
-            status: ord.negotiation?.status || 'bidding',
-            proposedPrice: proposed,
-            referencePrice: ord.negotiation?.referencePrice || ord.pricing.servicePrice,
-            offers: [...existingOffers.filter((o) => o.driverId !== currentDriver.id), newOffer],
-          },
-        };
-      })
-    );
-  };
-
-  const submitCounterOffer = (
-    orderId: string,
-    counterPrice: number,
-    driverId = activeDriverId,
-    etaMinutes = 6
-  ) => {
-    const currentDriver = drivers.find((d) => d.id === driverId) || drivers[0];
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const proposed = ord.negotiation?.proposedPrice || ord.pricing.servicePrice;
-        const existingOffers = ord.negotiation?.offers || [];
-        const isMototaxi = currentDriver.vehicle.toLowerCase().includes('torito') || currentDriver.vehicle.toLowerCase().includes('mototaxi');
-
-        const newOffer = {
-          id: `OFF-${Date.now()}`,
-          driverId: currentDriver.id,
-          driverName: currentDriver.name,
-          driverPhoto: currentDriver.photo,
-          driverRating: currentDriver.rating,
-          vehicleType: (isMototaxi ? 'mototaxi' : 'moto') as 'moto' | 'mototaxi',
-          vehicleInfo: currentDriver.vehicle,
-          offeredPrice: counterPrice,
-          isClientPriceAccepted: counterPrice === proposed,
-          etaMinutes,
-          createdAt: 'Justo ahora',
-        };
-
-        return {
-          ...ord,
-          negotiation: {
-            status: ord.negotiation?.status || 'bidding',
-            proposedPrice: proposed,
-            referencePrice: ord.negotiation?.referencePrice || ord.pricing.servicePrice,
-            offers: [...existingOffers.filter((o) => o.driverId !== currentDriver.id), newOffer],
-          },
-        };
-      })
-    );
-  };
-
-  const ignoreOrderAsDriver = (orderId: string, driverId = activeDriverId) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const ignored = ord.ignoredByDrivers || [];
-        return {
-          ...ord,
-          ignoredByDrivers: [...ignored, driverId],
-        };
-      })
-    );
-  };
-
-  const clientAcceptOffer = (orderId: string, offerId: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const offer = ord.negotiation?.offers.find((o) => o.id === offerId);
-        if (!offer) return ord;
-
-        const assignedDriver =
-          drivers.find((d) => d.id === offer.driverId) || {
-            id: offer.driverId,
-            name: offer.driverName,
-            phone: '962 458 912',
-            photo: offer.driverPhoto,
-            vehicle: offer.vehicleInfo,
-            plate: '4821-3W',
-            rating: offer.driverRating,
-            completedTrips: 180,
-            lat: ord.pickup.lat,
-            lng: ord.pickup.lng,
-            status: 'en_pedido' as const,
-          };
-
-        const finalPrice = offer.offeredPrice;
-        let platformFee = 0;
-        if (commissionConfig.type === 'percentage') {
-          platformFee = Math.round((finalPrice * (commissionConfig.percentageValue / 100)) * 10) / 10;
-        } else {
-          platformFee = commissionConfig.fixedValue;
-        }
-        const driverEarnings = Math.max(0, Math.round((finalPrice - platformFee) * 10) / 10);
-        const itemCost = ord.pricing.itemPrice || 0;
-        const total = finalPrice + itemCost;
-
-        return {
-          ...ord,
-          status: 'asignado',
-          driver: assignedDriver,
-          pricing: {
-            ...ord.pricing,
-            servicePrice: finalPrice,
-            platformFee,
-            driverEarnings,
-            total,
-          },
-          negotiation: {
-            status: 'agreed',
-            proposedPrice: ord.negotiation?.proposedPrice || finalPrice,
-            referencePrice: ord.negotiation?.referencePrice || finalPrice,
-            offers: ord.negotiation?.offers || [],
-            acceptedOffer: {
-              driverId: offer.driverId,
-              driverName: offer.driverName,
-              agreedPrice: finalPrice,
-              acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          },
-        };
-      })
-    );
-  };
-
-  const clientRejectOffer = (orderId: string, offerId: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId || !ord.negotiation) return ord;
-        return {
-          ...ord,
-          negotiation: {
-            ...ord.negotiation,
-            offers: ord.negotiation.offers.filter((o) => o.id !== offerId),
-          },
-        };
-      })
-    );
-  };
-
-  const updateProposedPrice = (orderId: string, newPrice: number) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const itemCost = ord.pricing.itemPrice || 0;
-        const total = newPrice + itemCost;
-        return {
-          ...ord,
-          pricing: {
-            ...ord.pricing,
-            servicePrice: newPrice,
-            proposedPrice: newPrice,
-            total,
-            driverEarnings: Math.max(0, newPrice - ord.pricing.platformFee),
-          },
-          negotiation: ord.negotiation
-            ? {
-                ...ord.negotiation,
-                proposedPrice: newPrice,
-              }
-            : undefined,
-        };
-      })
-    );
-  };
-
-  const openChatModal = (orderId: string, senderRole: 'client' | 'driver' = 'client') => {
-    setActiveChatOrderId(orderId);
-    setChatSenderRole(senderRole);
-  };
-
-  const closeChatModal = () => {
-    setActiveChatOrderId(null);
-  };
-
-  const sendChatMessage = (orderId: string, text: string, sender: 'client' | 'driver') => {
-    if (!text.trim()) return;
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const currentMessages = ord.chatMessages || [];
-        const senderName = sender === 'client' ? ord.customer.name : (ord.driver?.name || 'Repartidor');
-        const newMsg = {
-          id: `msg-${Date.now()}`,
-          sender,
-          senderName,
-          text: text.trim(),
-          timestamp: now,
-        };
-        return {
-          ...ord,
-          chatMessages: [...currentMessages, newMsg],
-        };
-      })
-    );
-
-    // If client sent a message and service is active with driver, simulate driver reply after 2.5s
-    if (sender === 'client') {
-      setTimeout(() => {
-        setOrders((current) =>
-          current.map((o) => {
-            if (o.id !== orderId || o.status === 'entregado' || o.status === 'cancelado' || !o.driver) return o;
-            const msgs = o.chatMessages || [];
-            const driverReplies = [
-              '¡Entendido! Ya voy en ruta hacia tu dirección en Huánuco.',
-              'Listo, llego en aproximadamente 4 minutos.',
-              'De acuerdo, gracias por la indicación. Ya estoy cerca.',
-              'Recibido, te aviso apenas llegue a la puerta.',
-            ];
-            const randomReply = driverReplies[Math.floor(Math.random() * driverReplies.length)];
-            return {
-              ...o,
-              chatMessages: [
-                ...msgs,
-                {
-                  id: `msg-${Date.now()}-reply`,
-                  sender: 'driver',
-                  senderName: o.driver.name,
-                  text: randomReply,
-                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                },
-              ],
-            };
-          })
-        );
-      }, 2500);
-    }
-  };
-
-  const updateOrderStatus = (orderId: string, status: OrderStatus, note?: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        const updated: Order = {
-          ...ord,
-          status,
-        };
-        if (status === 'entregado' && note) {
-          updated.deliveryProof = {
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            note,
-          };
-          // Credit driver wallet
-          if (ord.driver && ord.driver.id === activeDriverId) {
-            setWallet((w) => ({
-              balance: Math.round((w.balance + ord.pricing.driverEarnings) * 10) / 10,
-              transactions: [
-                {
-                  id: `TXN-${Date.now().toString().slice(-4)}`,
-                  type: 'order_payout',
-                  title: `Ganancia Pedido ${ord.id}`,
-                  amount: ord.pricing.driverEarnings,
-                  date: 'Hoy ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  orderId: ord.id,
-                  status: 'completado',
-                },
-                ...w.transactions,
-              ],
-            }));
-          }
-        }
-        return updated;
-      })
-    );
-  };
-
-  const acceptOrderAsDriver = (orderId: string, driverId = activeDriverId) => {
-    const currentDriver = drivers.find((d) => d.id === driverId) || drivers[0];
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        return {
-          ...ord,
-          status: 'asignado',
-          driver: currentDriver,
-        };
-      })
-    );
-  };
-
-  const verifyYapePayment = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
-        return {
-          ...ord,
-          payment: {
-            ...ord.payment,
-            isVerified: true,
-            paidAt: new Date().toISOString(),
-          },
-        };
-      })
-    );
-  };
-
-  const submitDriverApplication = (
-    appData: Omit<DriverApplication, 'id' | 'status' | 'submittedAt'>
-  ): DriverApplication => {
-    const newId = `APP-${Math.floor(100 + Math.random() * 900)}`;
-    const newApp: DriverApplication = {
-      ...appData,
-      id: newId,
-      status: 'PENDIENTE',
-      submittedAt: 'Justo ahora',
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('ndh_storage_sync', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('ndh_storage_sync', handleSync);
     };
-    setApplications((prev) => [newApp, ...prev]);
-    return newApp;
-  };
+  }, []);
 
-  const updateApplicationStatus = (appId: string, status: 'APROBADO' | 'RECHAZADO') => {
-    setApplications((prev) =>
-      prev.map((app) => {
-        if (app.id !== appId) return app;
-        return { ...app, status };
-      })
-    );
-
-    // If approved, create driver profile automatically
-    if (status === 'APROBADO') {
-      const app = applications.find((a) => a.id === appId);
-      if (app) {
-        const newDriver: DriverInfo = {
-          id: `DRV-${Math.floor(200 + Math.random() * 800)}`,
-          name: app.fullName,
-          phone: app.phone,
-          photo: app.documents.profilePhoto || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-          vehicle: `${app.model} (${app.color}, ${app.vehicleType})`,
-          plate: app.plate || 'PENDIENTE',
-          rating: 5.0,
-          completedTrips: 0,
-          lat: -9.9306,
-          lng: -76.2422,
-          status: 'disponible',
-        };
-        setDrivers((prev) => [...prev, newDriver]);
-      }
-    }
-  };
-
-  const updateCommissionConfig = (newConfig: Partial<CommissionConfig>) => {
-    setCommissionConfig((prev) => ({ ...prev, ...newConfig }));
-  };
-
+  // Navegación limpia de rutas
   const navigateTo = (route: AppRoute) => {
     let canonical: AppRoute = route;
     if (route === '/cliente') canonical = '/';
-    else if (route === '/delivery' || route === '/repartidor' || route === '/repartidores') canonical = '/repartidores';
-    else if (route === '/delivery/registro' || route === '/repartidor/registro' || route === '/repartidores/registro') canonical = '/repartidores/registro';
-    else if (route === '/admin' || route === '/administración' || route === '/administracion') canonical = '/administracion';
+    else if (route === '/repartidores') canonical = '/repartidor';
+    else if (route === '/administracion' || route === '/administración') canonical = '/admin';
 
     setCurrentRoute(canonical);
 
@@ -711,7 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const targetPath = canonical === '/' ? '/' : canonical;
         window.history.pushState({ route: canonical }, '', targetPath);
       } catch {
-        // Fallback for sandboxed iframe
+        // Fallback para sandbox
       }
     }
   };
@@ -722,11 +290,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hash = decodeURIComponent(window.location.hash).toLowerCase().trim().replace(/^#\/?/, '');
       const path = (pathname !== '/' && pathname !== '') ? pathname.replace(/^\//, '') : hash;
 
-      if (path.startsWith('administra') || path.startsWith('admin')) {
-        setCurrentRoute('/administracion');
-      } else if (path.startsWith('repartidor') || path.startsWith('delivery')) {
-        if (path.includes('registro')) setCurrentRoute('/repartidores/registro');
-        else setCurrentRoute('/repartidores');
+      if (path.startsWith('admin') || path.startsWith('administra')) {
+        setCurrentRoute('/admin');
+      } else if (path.startsWith('repartidor')) {
+        setCurrentRoute('/repartidor');
       } else if (path.startsWith('visualizacion')) {
         setCurrentRoute('/visualizacion');
       } else {
@@ -742,33 +309,402 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  // REGLA DE NEGOCIO: 20% Comisión Empresa / 80% Ganancia Neta Repartidor
+  const calculateFare = (
+    distanceKm: number,
+    serviceType: string,
+    estimatedCost = 0,
+    transportVehicle?: 'moto' | 'mototaxi'
+  ) => {
+    let base = commissionConfig.baseFare;
+    let kmRate = commissionConfig.perKmFare;
+
+    let typeExtra = 0;
+    if (serviceType === 'compra') typeExtra = 2.0;
+    if (serviceType === 'otro') typeExtra = 3.0;
+    if (serviceType === 'transporte') {
+      if (transportVehicle === 'moto') {
+        base = Math.max(4.0, commissionConfig.baseFare - 1.0);
+        kmRate = 1.2;
+      } else {
+        base = Math.max(5.0, commissionConfig.baseFare);
+        kmRate = 1.4;
+      }
+    }
+
+    const minFare = serviceType === 'transporte' && transportVehicle === 'moto' ? 4.0 : commissionConfig.minimumFare;
+    const rawServicePrice = Math.max(minFare, base + distanceKm * kmRate + typeExtra);
+    const servicePrice = Math.round(rawServicePrice * 10) / 10;
+
+    // 20% retenido para la empresa, 80% neto para el repartidor
+    const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
+    const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
+    const total = servicePrice + (estimatedCost || 0);
+    const estimatedMinutes = Math.max(6, Math.round(distanceKm * 3.5 + 4));
+
+    return {
+      servicePrice,
+      platformFee,
+      driverEarnings,
+      total,
+      estimatedMinutes,
+    };
+  };
+
+  // Creación de pedidos por clientes
+  const createOrder = (newOrderData: Omit<Order, 'id' | 'createdAt' | 'status'>): Order => {
+    const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const newId = `HX-${randomHex}`;
+
+    // Garantizar cálculo 20% / 80%
+    const servicePrice = newOrderData.pricing.servicePrice;
+    const platformFee = Math.round(servicePrice * 0.20 * 10) / 10;
+    const driverEarnings = Math.max(0, Math.round((servicePrice - platformFee) * 10) / 10);
+
+    const newOrder: Order = {
+      ...newOrderData,
+      id: newId,
+      createdAt: 'Justo ahora',
+      status: 'recibido',
+      pricing: {
+        ...newOrderData.pricing,
+        platformFee,
+        driverEarnings,
+      },
+      payment: {
+        ...newOrderData.payment,
+        servicePrice,
+        platformFee,
+        driverEarnings,
+      },
+    };
+
+    setOrders((prev) => [newOrder, ...prev]);
+    setActiveClientOrderId(newId);
+    return newOrder;
+  };
+
+  const updateOrderStatus = (orderId: string, status: OrderStatus, note?: string) => {
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+
+        const updatedOrder: Order = {
+          ...order,
+          status,
+          deliveryNote: note || order.deliveryNote,
+        };
+
+        // Si el pedido es entregado, acreditar el 80% al repartidor
+        if (status === 'entregado') {
+          const earnings = order.pricing?.driverEarnings || order.payment?.driverEarnings || Math.round(order.pricing.servicePrice * 0.8 * 10) / 10;
+
+          setWallet((w) => ({
+            balance: Math.round((w.balance + earnings) * 10) / 10,
+            transactions: [
+              {
+                id: `TXN-${Date.now().toString().slice(-4)}`,
+                type: 'order_payout',
+                title: `Ganancia Pedido ${order.id} (80%)`,
+                amount: earnings,
+                date: 'Hoy ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                orderId: order.id,
+                status: 'completado',
+              },
+              ...w.transactions,
+            ],
+          }));
+
+          // Incrementar contador del repartidor
+          if (order.driver?.id) {
+            setDrivers((dList) =>
+              dList.map((d) =>
+                d.id === order.driver?.id ? { ...d, completedTrips: d.completedTrips + 1, status: 'disponible' } : d
+              )
+            );
+          }
+        }
+
+        return updatedOrder;
+      })
+    );
+  };
+
+  const acceptOrderAsDriver = (orderId: string, driverId?: string) => {
+    const targetDriverId = driverId || activeDriverId;
+    const foundDriver = drivers.find((d) => d.id === targetDriverId) || {
+      id: currentUser?.driverProfileId || targetDriverId,
+      name: currentUser?.name || 'Repartidor',
+      phone: currentUser?.phone || '976 387 226',
+      photo: currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      vehicle: currentUser?.vehicleInfo ? `${currentUser.vehicleInfo.brand} ${currentUser.vehicleInfo.model}` : 'Moto Honda',
+      plate: currentUser?.vehicleInfo?.plate || '8492-7W',
+      rating: 5.0,
+      completedTrips: 0,
+      lat: -9.9306,
+      lng: -76.2422,
+      status: 'en_pedido' as const,
+    };
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              driver: foundDriver,
+              status: 'asignado',
+            }
+          : o
+      )
+    );
+  };
+
+  const acceptProposedPriceAsDriver = (orderId: string, driverId?: string) => {
+    acceptOrderAsDriver(orderId, driverId);
+  };
+
+  const submitCounterOffer = (orderId: string, counterPrice: number, driverId?: string, etaMinutes = 15) => {
+    const targetDriverId = driverId || activeDriverId;
+    const foundDriver = drivers.find((d) => d.id === targetDriverId) || {
+      id: currentUser?.driverProfileId || targetDriverId,
+      name: currentUser?.name || 'Repartidor',
+      phone: currentUser?.phone || '976 387 226',
+      photo: currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      vehicle: 'Moto',
+      plate: '8492-7W',
+      rating: 5.0,
+      completedTrips: 0,
+      lat: -9.9306,
+      lng: -76.2422,
+      status: 'disponible' as const,
+    };
+
+    const offerId = `OFF-${Date.now().toString().slice(-4)}`;
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              counterOffers: [
+                ...(o.counterOffers || []),
+                {
+                  id: offerId,
+                  driver: foundDriver,
+                  counterPrice,
+                  etaMinutes,
+                  status: 'pendiente',
+                  timestamp: 'Justo ahora',
+                },
+              ],
+            }
+          : o
+      )
+    );
+  };
+
+  const ignoreOrderAsDriver = (orderId: string, driverId?: string) => {
+    const dId = driverId || activeDriverId;
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              ignoredByDrivers: [...(o.ignoredByDrivers || []), dId],
+            }
+          : o
+      )
+    );
+  };
+
+  const clientAcceptOffer = (orderId: string, offerId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const offer = o.counterOffers?.find((off) => off.id === offerId);
+        if (!offer) return o;
+
+        const newFare = offer.counterPrice;
+        const platformFee = Math.round(newFare * 0.20 * 10) / 10;
+        const driverEarnings = Math.max(0, Math.round((newFare - platformFee) * 10) / 10);
+
+        return {
+          ...o,
+          status: 'asignado',
+          driver: offer.driver,
+          payment: {
+            ...o.payment,
+            servicePrice: newFare,
+            total: newFare + (o.payment.productEstimatedCost || 0),
+            platformFee,
+            driverEarnings,
+          },
+          counterOffers: o.counterOffers?.map((off) =>
+            off.id === offerId ? { ...off, status: 'aceptada' } : { ...off, status: 'rechazada' }
+          ),
+        };
+      })
+    );
+  };
+
+  const clientRejectOffer = (orderId: string, offerId: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              counterOffers: o.counterOffers?.map((off) =>
+                off.id === offerId ? { ...off, status: 'rechazada' } : off
+              ),
+            }
+          : o
+      )
+    );
+  };
+
+  const updateProposedPrice = (orderId: string, newPrice: number) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const platformFee = Math.round(newPrice * 0.20 * 10) / 10;
+        const driverEarnings = Math.max(0, Math.round((newPrice - platformFee) * 10) / 10);
+        return {
+          ...o,
+          payment: {
+            ...o.payment,
+            servicePrice: newPrice,
+            total: newPrice + (o.payment.productEstimatedCost || 0),
+            platformFee,
+            driverEarnings,
+          },
+        };
+      })
+    );
+  };
+
+  const verifyYapePayment = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              payment: {
+                ...o.payment,
+                isVerified: true,
+                paymentStatus: 'pagado',
+              },
+            }
+          : o
+      )
+    );
+  };
+
+  // Postulación a repartidor
+  const submitDriverApplication = (appData: Omit<DriverApplication, 'id' | 'status' | 'submittedAt'>) => {
+    const newApp: DriverApplication = {
+      ...appData,
+      id: `APP-${Date.now().toString().slice(-4)}`,
+      status: 'PENDIENTE',
+      submittedAt: 'Justo ahora',
+    };
+    setApplications((prev) => [newApp, ...prev]);
+    return newApp;
+  };
+
+  // Aprobación de repartidor por el Administrador
+  const updateApplicationStatus = (appId: string, status: 'APROBADO' | 'RECHAZADO') => {
+    setApplications((prev) =>
+      prev.map((a) => (a.id === appId ? { ...a, status } : a))
+    );
+
+    if (status === 'APROBADO') {
+      const app = applications.find((a) => a.id === appId);
+      if (app) {
+        const newDriverId = `DRV-${Date.now().toString().slice(-4)}`;
+        const newDriver: DriverInfo = {
+          id: newDriverId,
+          name: app.fullName,
+          phone: app.phone,
+          photo: app.documents?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          vehicle: `${app.brand || 'Honda'} ${app.model || 'Moto'} (${app.vehicleType})`,
+          plate: app.plate || 'PENDIENTE',
+          rating: 5.0,
+          completedTrips: 0,
+          lat: -9.9306,
+          lng: -76.2422,
+          status: 'disponible',
+        };
+
+        const newDriverUser: AppUser = {
+          id: `USR-${newDriverId}`,
+          name: app.fullName,
+          email: app.email,
+          phone: app.phone,
+          role: 'driver',
+          driverProfileId: newDriverId,
+          driverStatus: 'APROBADO',
+          address: app.address,
+          createdAt: 'Hoy',
+          avatar: newDriver.photo,
+        };
+
+        setDrivers((dList) => [...dList, newDriver]);
+        setUsers((uList) => [...uList, newDriverUser]);
+      }
+    }
+  };
+
+  const updateCommissionConfig = (newConfig: Partial<CommissionConfig>) => {
+    setCommissionConfig((prev) => ({ ...prev, ...newConfig }));
+  };
+
+  // Autenticación independiente y privada
   const login = (email: string, _password?: string, intendedRole?: UserRole) => {
     const cleanEmail = email.trim().toLowerCase();
+
+    // Verificación de credenciales de Dueño / Admin
+    if (cleanEmail === 'admin@negritodehuanuco.com' || cleanEmail.includes('admin') || intendedRole === 'admin') {
+      const adminUser: AppUser = {
+        id: 'USR-ADMIN-01',
+        name: 'Administrador General',
+        phone: '976 387 226',
+        email: 'admin@negritodehuanuco.com',
+        role: 'admin',
+        createdAt: '2025',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+      };
+      setCurrentUser(adminUser);
+      setRole('admin');
+      navigateTo('/admin');
+      return { success: true };
+    }
+
+    // Verificación de repartidor
     let found = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!found && intendedRole === 'driver') {
+      return {
+        success: false,
+        message: 'No existe una cuenta de repartidor registrada con este correo. Por favor postula o regístrate en "Quiero ser repartidor".',
+      };
+    }
 
     if (!found) {
-      if (cleanEmail === 'admin@negritodehuanuco.com' || cleanEmail === 'admin@expresshuanuco.pe' || cleanEmail.includes('admin') || intendedRole === 'admin') {
-        found = users.find((u) => u.role === 'admin') || INITIAL_USERS[3];
-      } else if (cleanEmail.includes('driver') || cleanEmail.includes('conductor') || intendedRole === 'driver') {
-        found = users.find((u) => u.role === 'driver') || INITIAL_USERS[1];
-      } else {
-        found = {
-          id: `USR-${Date.now()}`,
-          name: cleanEmail.split('@')[0],
-          email: cleanEmail,
-          phone: '962 000 000',
-          role: intendedRole || 'client',
-          createdAt: 'Hoy',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-        };
-        setUsers((prev) => [...prev, found!]);
-      }
+      // Cliente nuevo o existente
+      found = {
+        id: `USR-${Date.now()}`,
+        name: cleanEmail.split('@')[0],
+        email: cleanEmail,
+        phone: '962 000 000',
+        role: intendedRole || 'client',
+        createdAt: 'Hoy',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      };
+      setUsers((prev) => [...prev, found!]);
     }
 
     if (intendedRole && found.role !== intendedRole) {
       return {
         success: false,
-        message: `Esta cuenta está registrada como "${found.role}". Para acceder a esta zona debes usar una cuenta con rol "${intendedRole}".`,
+        message: `Esta cuenta no tiene permisos para ingresar al área de ${intendedRole}.`,
       };
     }
 
@@ -778,12 +714,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveDriverId(found.driverProfileId);
     }
 
-    if (found.role === 'client') {
-      navigateTo('/');
+    if (found.role === 'admin') {
+      navigateTo('/admin');
     } else if (found.role === 'driver') {
-      navigateTo('/repartidores');
-    } else if (found.role === 'admin') {
-      navigateTo('/administracion');
+      navigateTo('/repartidor');
+    } else {
+      navigateTo('/');
     }
 
     return { success: true };
@@ -791,6 +727,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     setCurrentUser(null);
+    setRole('client');
+    navigateTo('/');
   };
 
   const registerClient = (data: { name: string; email: string; phone: string; address?: string }) => {
@@ -820,22 +758,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
     setCurrentUser(newUser);
     setRole('client');
-    navigateTo('/');
     return { success: true, user: newUser };
   };
 
   const registerDriver = (data: any) => {
-    submitDriverApplication(data);
+    const newApp = submitDriverApplication(data);
+    const newDriverId = `DRV-${Date.now().toString().slice(-4)}`;
+
+    const newDriverProfile: DriverInfo = {
+      id: newDriverId,
+      name: data.fullName,
+      phone: data.phone,
+      photo: data.documents?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      vehicle: `${data.brand || 'Honda'} ${data.model || '150'} (${data.vehicleType})`,
+      plate: data.plate || 'PENDIENTE',
+      rating: 5.0,
+      completedTrips: 0,
+      lat: -9.9306,
+      lng: -76.2422,
+      status: 'disponible',
+    };
+
     const newDriverUser: AppUser = {
-      id: `USR-DRV-${Date.now()}`,
-      name: `${data.fullName}`,
+      id: `USR-${newDriverId}`,
+      name: data.fullName,
       dni: data.dni,
       email: data.email,
       phone: data.phone,
       address: data.address,
       birthDate: data.birthDate,
       role: 'driver',
-      driverStatus: 'PENDIENTE',
+      driverProfileId: newDriverId,
+      driverStatus: 'APROBADO',
       vehicleInfo: {
         type: data.vehicleType,
         brand: data.brand || 'Honda',
@@ -844,15 +798,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         plate: data.plate,
       },
       createdAt: 'Hoy',
-      avatar: data.documents?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      avatar: newDriverProfile.photo,
     };
+
+    setDrivers((prev) => [...prev, newDriverProfile]);
     setUsers((prev) => [...prev, newDriverUser]);
     setCurrentUser(newDriverUser);
     setRole('driver');
-    navigateTo('/repartidores');
+    setActiveDriverId(newDriverId);
+    navigateTo('/repartidor');
+
     return {
       success: true,
-      message: 'Postulación registrada exitosamente en estado: Solicitud pendiente de revisión',
+      message: 'Cuenta de repartidor creada exitosamente.',
       user: newDriverUser,
     };
   };
@@ -885,7 +843,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const submitForgotPassword = (email: string) => {
     return {
       success: true,
-      message: `Se ha enviado el enlace de restablecimiento seguro a: ${email}`,
+      message: `Se ha enviado el enlace de restablecimiento a: ${email}`,
     };
   };
 
@@ -906,6 +864,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ],
     }));
     return true;
+  };
+
+  const openChatModal = (orderId: string, senderRole: 'client' | 'driver' = 'client') => {
+    setActiveChatOrderId(orderId);
+    setChatSenderRole(senderRole);
+  };
+
+  const closeChatModal = () => {
+    setActiveChatOrderId(null);
+  };
+
+  const sendChatMessage = (orderId: string, text: string, sender: 'client' | 'driver') => {
+    const newMessage = {
+      id: `MSG-${Date.now()}`,
+      sender,
+      senderName: sender === 'client' ? (currentUser?.name || 'Cliente') : 'Repartidor',
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              chatMessages: [...(o.chatMessages || []), newMessage],
+            }
+          : o
+      )
+    );
   };
 
   return (

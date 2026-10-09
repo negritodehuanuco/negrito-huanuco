@@ -166,12 +166,12 @@ function MainContent() {
           )}
 
           {/* ========================================================================= */}
-          {/* 2. APARTADO REPARTIDORES: /repartidores (Muestra directamente la interfaz)*/}
+          {/* 2. APARTADO REPARTIDORES: /repartidor (Privado con login y registro)      */}
           {/* ========================================================================= */}
-          {(currentRoute === '/delivery' || currentRoute === '/delivery/registro' || currentRoute === '/repartidores' || currentRoute === '/repartidor' || currentRoute === '/repartidores/registro' || currentRoute === '/repartidor/registro') && (
+          {(currentRoute === '/repartidor' || currentRoute === '/repartidores') && (
             <>
-              {currentRoute.includes('registro') ? (
-                <DriverAuthView initialTab="register" />
+              {!currentUser || currentUser.role !== 'driver' ? (
+                <DriverAuthView initialTab="login" />
               ) : (
                 <DriverPanel />
               )}
@@ -179,14 +179,12 @@ function MainContent() {
           )}
 
           {/* ========================================================================= */}
-          {/* 3. APARTADO ADMINISTRADOR: /administracion (Protegido con auth y permisos) */}
+          {/* 3. APARTADO ADMINISTRADOR: /admin (Oculto y protegido con contraseña)     */}
           {/* ========================================================================= */}
-          {(currentRoute === '/administracion' || currentRoute === '/administración' || currentRoute === '/admin') && (
+          {(currentRoute === '/admin' || currentRoute === '/administracion' || currentRoute === '/administración') && (
             <>
-              {!currentUser ? (
+              {!currentUser || currentUser.role !== 'admin' ? (
                 <AdminLoginView />
-              ) : currentUser.role !== 'admin' ? (
-                <AccessDeniedView attemptedArea="admin" />
               ) : (
                 <AdminPanel />
               )}
@@ -287,27 +285,27 @@ function MainContent() {
               <li>
                 <button
                   type="button"
-                  onClick={() => navigateTo('/repartidores')}
+                  onClick={() => navigateTo('/repartidor')}
                   className="hover:text-red-500 font-semibold cursor-pointer text-left transition-colors flex items-center gap-1.5"
                 >
                   <span>🏍️ Repartidores</span>
-                  <span className="text-[10px] text-neutral-500 font-mono">(/repartidores)</span>
+                  <span className="text-[10px] text-neutral-500 font-mono">(/repartidor)</span>
                 </button>
               </li>
               <li>
                 <button
                   type="button"
-                  onClick={() => navigateTo('/administracion')}
+                  onClick={() => navigateTo('/admin')}
                   className="hover:text-red-500 font-semibold cursor-pointer text-left transition-colors flex items-center gap-1.5"
                 >
                   <span>🛡️ Panel Administrador</span>
-                  <span className="text-[10px] text-neutral-500 font-mono">(/administracion)</span>
+                  <span className="text-[10px] text-neutral-500 font-mono">(/admin)</span>
                 </button>
               </li>
               <li>
                 <button
                   type="button"
-                  onClick={() => navigateTo('/repartidores/registro')}
+                  onClick={() => setOpenRegistrationModal(true)}
                   className="hover:text-red-500 font-semibold cursor-pointer text-left transition-colors"
                 >
                   📝 Postular como repartidor
@@ -331,7 +329,7 @@ function MainContent() {
         <div className="max-w-5xl mx-auto px-4 mt-8 pt-4 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-500">
           <div>© {new Date().getFullYear()} NEGRITO DE HUÁNUCO (negritodehuanuco.com). Todos los derechos reservados.</div>
           <div className="flex items-center gap-1">
-            <span>Rutas: Clientes (/) · Repartidores (/repartidores) · Administrador (/administracion)</span>
+            <span>Rutas: Clientes (/) · Repartidores (/repartidor) · Administrador (/admin)</span>
           </div>
         </div>
       </footer>
@@ -353,14 +351,14 @@ function MainContent() {
               </button>
               <button
                 type="button"
-                onClick={() => navigateTo('/repartidores')}
+                onClick={() => navigateTo('/repartidor')}
                 className="text-[11px] font-bold text-neutral-700 bg-neutral-100 px-2 py-1 rounded-lg cursor-pointer"
               >
                 2. Repartidores
               </button>
               <button
                 type="button"
-                onClick={() => navigateTo('/administracion')}
+                onClick={() => navigateTo('/admin')}
                 className="text-[11px] font-bold text-neutral-700 bg-neutral-100 px-2 py-1 rounded-lg cursor-pointer"
               >
                 3. Admin
@@ -448,7 +446,7 @@ function MainContent() {
           </div>
         )}
 
-        {(currentRoute === '/repartidores' || currentRoute === '/repartidores/registro' || currentRoute === '/delivery' || currentRoute === '/delivery/registro' || currentRoute === '/repartidor' || currentRoute === '/repartidor/registro') && (
+        {(currentRoute === '/repartidor' || currentRoute === '/repartidores') && (
           <div className="flex items-center justify-between px-3 py-1">
             <button
               type="button"
@@ -463,7 +461,7 @@ function MainContent() {
           </div>
         )}
 
-        {(currentRoute === '/administracion' || currentRoute === '/administración' || currentRoute === '/admin') && (
+        {(currentRoute === '/admin' || currentRoute === '/administracion' || currentRoute === '/administración') && (
           <div className="flex items-center justify-between px-3 py-1">
             <button
               type="button"

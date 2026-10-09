@@ -26,7 +26,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Order, OrderStatus } from '../../types';
+import { Order, OrderStatus, DriverInfo } from '../../types';
 import { HuanucoMap } from '../common/HuanucoMap';
 
 type DriverTab = 'inicio' | 'disponibles' | 'activo' | 'ganancias' | 'historial' | 'perfil';
@@ -62,9 +62,21 @@ export const DriverPanel: React.FC = () => {
   const [acceptedNotice, setAcceptedNotice] = useState<{ [orderId: string]: boolean }>({});
 
   const [shareGps, setShareGps] = useState(true);
-  const { logout, navigateTo } = useApp();
+  const { logout, navigateTo, currentUser } = useApp();
 
-  const currentDriver = drivers.find((d) => d.id === activeDriverId) || drivers[0];
+  const currentDriver: DriverInfo = drivers.find((d) => d.id === currentUser?.driverProfileId || d.id === activeDriverId) || {
+    id: currentUser?.driverProfileId || (currentUser?.id ? `DRV-${currentUser.id}` : 'DRV-101'),
+    name: currentUser?.name || 'Repartidor',
+    phone: currentUser?.phone || '976 387 226',
+    photo: currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    vehicle: currentUser?.vehicleInfo ? `${currentUser.vehicleInfo.brand} ${currentUser.vehicleInfo.model} (${currentUser.vehicleInfo.type})` : 'Moto Honda',
+    plate: currentUser?.vehicleInfo?.plate || '8492-7W',
+    rating: 5.0,
+    completedTrips: 0,
+    lat: -9.9306,
+    lng: -76.2422,
+    status: 'disponible',
+  };
 
   // Orders available for drivers to take: status === 'recibido' AND not ignored by this driver
   const availableOrders = orders.filter(
@@ -86,6 +98,16 @@ export const DriverPanel: React.FC = () => {
   // Completed orders by this driver
   const completedOrders = orders.filter(
     (o) => o.driver?.id === currentDriver.id && o.status === 'entregado'
+  );
+
+  // Ganancias netas del repartidor (80% del servicio)
+  const driverNetEarnings = completedOrders.reduce(
+    (sum, o) =>
+      sum +
+      (o.pricing?.driverEarnings ||
+        o.payment?.driverEarnings ||
+        Math.round((o.pricing?.servicePrice || o.payment?.servicePrice || 0) * 0.8 * 10) / 10),
+    0
   );
 
   const handleAccept = (orderId: string) => {
@@ -144,7 +166,7 @@ export const DriverPanel: React.FC = () => {
                 Repartidor
               </span>
               <span className="text-[10px] font-mono text-neutral-300 bg-black/60 px-2 py-0.5 rounded border border-neutral-700">
-                /repartidores
+                /repartidor
               </span>
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
@@ -206,7 +228,7 @@ export const DriverPanel: React.FC = () => {
             type="button"
             onClick={() => {
               logout();
-              navigateTo('/repartidores');
+              navigateTo('/repartidor');
             }}
             className="px-3 py-2 rounded-xl font-bold text-xs bg-slate-800 hover:bg-red-950 hover:text-red-400 text-slate-400 border border-slate-700 transition-colors cursor-pointer"
             title="Cerrar sesión de repartidor"

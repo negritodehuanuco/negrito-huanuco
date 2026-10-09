@@ -111,6 +111,15 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface CounterOffer {
+  id: string;
+  driver: DriverInfo;
+  counterPrice: number;
+  etaMinutes: number;
+  status: 'pendiente' | 'aceptada' | 'rechazada';
+  timestamp: string;
+}
+
 export interface Order {
   id: string;
   createdAt: string;
@@ -156,12 +165,20 @@ export interface Order {
     };
   };
   ignoredByDrivers?: string[];
+  deliveryNote?: string;
+  counterOffers?: CounterOffer[];
   payment: {
     method: PaymentMethod;
     isVerified: boolean;
     receiptUrl?: string;
     yapeNumber?: string;
     paidAt?: string;
+    servicePrice?: number;
+    platformFee?: number;
+    driverEarnings?: number;
+    total?: number;
+    productEstimatedCost?: number;
+    paymentStatus?: string;
   };
   driver?: DriverInfo;
   deliveryProof?: {
@@ -181,6 +198,7 @@ export interface DriverApplication {
   email: string;
   address: string;
   vehicleType: 'moto' | 'mototaxi';
+  brand?: string;
   model: string;
   color: string;
   plate: string;

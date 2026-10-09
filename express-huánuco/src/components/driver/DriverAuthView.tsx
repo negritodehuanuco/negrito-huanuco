@@ -57,36 +57,54 @@ export const DriverAuthView: React.FC<DriverAuthViewProps> = ({ initialTab = 'lo
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!loginEmail.trim()) {
+      setLoginError('Por favor ingresa tu correo electrónico.');
+      return;
+    }
+    if (!loginPassword.trim()) {
+      setLoginError('Por favor ingresa tu contraseña.');
+      return;
+    }
     setLoginError(null);
     setIsLoading(true);
 
     setTimeout(() => {
       setIsLoading(false);
-      const res = login(loginEmail || 'carlos.conductor@negritodehuanuco.com', loginPassword, 'driver');
+      const res = login(loginEmail.trim(), loginPassword, 'driver');
       if (!res.success) {
-        setLoginError(res.message || 'Error al iniciar sesión.');
+        setLoginError(res.message || 'Credenciales de repartidor no válidas. Si aún no tienes cuenta, postula en "Quiero ser repartidor".');
       }
     }, 400);
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalEmail = (correo || usuario).trim();
+    if (!finalEmail) {
+      alert('Por favor ingresa un correo electrónico.');
+      return;
+    }
+    if (!password.trim()) {
+      alert('Por favor define una contraseña.');
+      return;
+    }
     setIsLoading(true);
 
     setTimeout(() => {
       setIsLoading(false);
       registerDriver({
-        fullName: `${nombre || 'Maycol'} ${apellido || 'Conde Figueroa'}`.trim(),
-        dni: dni || '74829103',
+        fullName: `${nombre} ${apellido}`.trim() || 'Repartidor Huánuco',
+        dni: dni.trim() || 'Sin DNI',
         birthDate,
-        phone: telefono || '962 458 912',
-        email: correo || usuario || 'repartidor@negritodehuanuco.com',
-        address: direccion || 'Jr. Dos de Mayo 740, Huánuco',
+        phone: telefono.trim() || '976 387 226',
+        email: finalEmail.toLowerCase(),
+        password: password.trim(),
+        address: direccion.trim() || 'Huánuco',
         vehicleType,
         brand: marca,
         model: modelo,
         year,
-        plate: placa || '8492-7W',
+        plate: placa.trim().toUpperCase() || 'EN TRÁMITE',
         documents: {
           profilePhoto: fotoPerfil || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         },
@@ -224,7 +242,7 @@ export const DriverAuthView: React.FC<DriverAuthViewProps> = ({ initialTab = 'lo
                   required
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="carlos.conductor@negritodehuanuco.com"
+                  placeholder="tu.correo@ejemplo.com"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium focus:bg-white focus:border-red-500 focus:outline-hidden"
                 />
               </div>
@@ -256,43 +274,13 @@ export const DriverAuthView: React.FC<DriverAuthViewProps> = ({ initialTab = 'lo
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            {/* Quick Autofill Helper Buttons */}
-            <div className="pt-3 border-t border-neutral-100 space-y-2">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block text-center">
-                Autocompletar credenciales de conductor registrado:
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('carlos.conductor@negritodehuanuco.com');
-                    setLoginPassword('123456');
-                  }}
-                  className="p-2 bg-neutral-50 hover:bg-red-50 border border-neutral-200 hover:border-red-400 rounded-xl text-left transition-colors cursor-pointer"
-                >
-                  <div className="font-extrabold text-[11px] text-neutral-900">Carlos Mendoza (Moto)</div>
-                  <div className="text-[9px] text-neutral-500 font-mono">carlos.conductor@...</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('juan.mototaxi@negritodehuanuco.com');
-                    setLoginPassword('123456');
-                  }}
-                  className="p-2 bg-neutral-50 hover:bg-red-50 border border-neutral-200 hover:border-red-400 rounded-xl text-left transition-colors cursor-pointer"
-                >
-                  <div className="font-extrabold text-[11px] text-neutral-900">Juan Quispe (Mototaxi)</div>
-                  <div className="text-[9px] text-neutral-500 font-mono">juan.mototaxi@...</div>
-                </button>
-              </div>
-
+            <div className="pt-3 border-t border-neutral-100 text-center">
               <button
                 type="button"
                 onClick={() => setActiveTab('register')}
-                className="w-full py-2 text-center text-xs font-bold text-red-600 hover:underline cursor-pointer"
+                className="w-full py-2.5 px-3 bg-neutral-50 hover:bg-red-50 border border-neutral-200 hover:border-red-300 rounded-xl text-center text-xs font-bold text-red-600 transition-colors cursor-pointer"
               >
-                ¿Aún no tienes cuenta? Regístrate aquí: "Quiero ser repartidor"
+                ¿Aún no tienes cuenta? Postula aquí: "Quiero ser repartidor"
               </button>
             </div>
           </form>

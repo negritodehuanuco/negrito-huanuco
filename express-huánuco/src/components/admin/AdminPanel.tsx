@@ -78,16 +78,22 @@ export const AdminPanel: React.FC = () => {
   const [selectedDetailOrder, setSelectedDetailOrder] = useState<Order | null>(null);
   const [selectedDriverDetail, setSelectedDriverDetail] = useState<DriverInfo | null>(null);
 
-  // KPIs
-  const todayOrdersCount = orders.length + 18;
+  // KPIs reales calculados
+  const todayOrdersCount = orders.length;
   const activeOrders = orders.filter((o) => o.status !== 'entregado' && o.status !== 'cancelado');
   const completedOrders = orders.filter((o) => o.status === 'entregado');
   const pendingOrders = orders.filter((o) => o.status === 'recibido');
   const cancelledOrders = orders.filter((o) => o.status === 'cancelado');
 
-  const totalRevenue = orders.reduce((acc, o) => acc + o.pricing.total, 1420);
-  const totalCommissions = orders.reduce((acc, o) => acc + o.pricing.platformFee, 284);
-  const driverEarningsTotal = Math.max(0, totalRevenue - totalCommissions);
+  const totalRevenue = completedOrders.reduce((acc, o) => acc + (o.payment.servicePrice || 0), 0);
+  const totalCommissions = completedOrders.reduce(
+    (acc, o) => acc + (o.payment.platformFee || Math.round((o.payment.servicePrice || 0) * 0.20 * 10) / 10),
+    0
+  );
+  const driverEarningsTotal = completedOrders.reduce(
+    (acc, o) => acc + (o.payment.driverEarnings || Math.round((o.payment.servicePrice || 0) * 0.80 * 10) / 10),
+    0
+  );
   const pendingPayments = orders.filter((o) => o.payment.method === 'yape_anticipado' && !o.payment.isVerified);
   const pendingApplications = applications.filter((a) => a.status === 'PENDIENTE');
 
@@ -135,7 +141,7 @@ export const AdminPanel: React.FC = () => {
               NEGRITO DE HUÁNUCO HQ
             </span>
             <span className="text-[10px] font-mono font-bold bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-300">
-              /administracion
+              /admin
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -1256,32 +1262,38 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-100 text-xs font-mono">
-              {wallet.transactions.map((tx) => (
-                <div key={tx.id} className="py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-700">
-                      {tx.type === 'withdrawal' ? '📤' : '📥'}
-                    </span>
-                    <div>
-                      <div className="font-bold text-slate-900 font-sans">{tx.title}</div>
-                      <div className="text-[11px] text-slate-400">{tx.date}</div>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div
-                      className={`text-sm font-black ${
-                        tx.amount < 0 ? 'text-slate-900' : 'text-emerald-600'
-                      }`}
-                    >
-                      {tx.amount < 0 ? `- S/ ${Math.abs(tx.amount).toFixed(2)}` : `+ S/ ${tx.amount.toFixed(2)}`}
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-sans">
-                      {tx.status}
-                    </span>
-                  </div>
+              {wallet.transactions.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 font-sans text-xs">
+                  No hay transacciones ni retiros registrados aún. Las operaciones se registrarán al completar pedidos.
                 </div>
-              ))}
+              ) : (
+                wallet.transactions.map((tx) => (
+                  <div key={tx.id} className="py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-700">
+                        {tx.type === 'withdrawal' ? '📤' : '📥'}
+                      </span>
+                      <div>
+                        <div className="font-bold text-slate-900 font-sans">{tx.title}</div>
+                        <div className="text-[11px] text-slate-400">{tx.date}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div
+                        className={`text-sm font-black ${
+                          tx.amount < 0 ? 'text-slate-900' : 'text-emerald-600'
+                        }`}
+                      >
+                        {tx.amount < 0 ? `- S/ ${Math.abs(tx.amount).toFixed(2)}` : `+ S/ ${tx.amount.toFixed(2)}`}
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-sans">
+                        {tx.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1551,40 +1563,36 @@ export const AdminPanel: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono">
                   <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-slate-400">Hoy 10:48</td>
-                    <td className="p-3.5 font-sans font-bold text-slate-900">Inicio de Sesión Admin</td>
+                    <td className="p-3.5 text-slate-400">Hoy {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="p-3.5 font-sans font-bold text-slate-900">Acceso a Consola de Administración</td>
                     <td className="p-3.5 text-red-600 font-bold">admin@negritodehuanuco.com</td>
-                    <td className="p-3.5 font-sans text-slate-600">Acceso a Consola HQ desde Huánuco Centro</td>
-                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-emerald-50 text-emerald-700">Completado</span></td>
+                    <td className="p-3.5 font-sans text-slate-600">Sesión iniciada con éxito en la consola general</td>
+                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-emerald-50 text-emerald-700">Activo</span></td>
                   </tr>
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-slate-400">Hoy 10:35</td>
-                    <td className="p-3.5 font-sans font-bold text-slate-900">Validación de Pago Yape</td>
-                    <td className="p-3.5 text-slate-700">Sistema Automático</td>
-                    <td className="p-3.5 font-sans text-slate-600">Comprobante verificado para pedido HX-8F42K</td>
-                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-emerald-50 text-emerald-700">Verificado</span></td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-slate-400">Hoy 09:15</td>
-                    <td className="p-3.5 font-sans font-bold text-slate-900">Postulación de Conductor</td>
-                    <td className="p-3.5 text-slate-700">Carlos Mendoza (Moto)</td>
-                    <td className="p-3.5 font-sans text-slate-600">Registro con Honda GLH 150 (Placa 8492-7W)</td>
-                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-blue-50 text-blue-700">Aprobado</span></td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-slate-400">Ayer 18:20</td>
-                    <td className="p-3.5 font-sans font-bold text-slate-900">Liquidación de Billetera</td>
-                    <td className="p-3.5 text-slate-700">Finanzas NEGRITO DE HUÁNUCO</td>
-                    <td className="p-3.5 font-sans text-slate-600">Retiro procesado a cuenta Yape: S/ 30.00</td>
-                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-emerald-50 text-emerald-700">Completado</span></td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 text-slate-400">Ayer 14:05</td>
-                    <td className="p-3.5 font-sans font-bold text-slate-900">Actualización de Tarifa Base</td>
-                    <td className="p-3.5 text-red-600 font-bold">admin@negritodehuanuco.com</td>
-                    <td className="p-3.5 font-sans text-slate-600">Tarifa base confirmada en S/ 6.00 Huánuco</td>
-                    <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-slate-100 text-slate-700">Registrado</span></td>
-                  </tr>
+                  {applications.map((app) => (
+                    <tr key={app.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3.5 text-slate-400">{app.submittedAt}</td>
+                      <td className="p-3.5 font-sans font-bold text-slate-900">Postulación de Repartidor</td>
+                      <td className="p-3.5 text-slate-700">{app.fullName}</td>
+                      <td className="p-3.5 font-sans text-slate-600">Registro: {app.vehicleType} · Placa {app.plate || 'Pendiente'}</td>
+                      <td className="p-3.5">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-bold ${
+                          app.status === 'APROBADO' ? 'bg-emerald-50 text-emerald-700' : app.status === 'RECHAZADO' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {app.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {orders.map((ord) => (
+                    <tr key={ord.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3.5 text-slate-400">{ord.createdAt}</td>
+                      <td className="p-3.5 font-sans font-bold text-slate-900">Pedido {ord.id} ({ord.serviceType})</td>
+                      <td className="p-3.5 text-slate-700">{ord.customer.name}</td>
+                      <td className="p-3.5 font-sans text-slate-600">Tarifa S/ {(ord.pricing?.servicePrice || ord.payment?.servicePrice || 0).toFixed(2)} · {ord.payment.method}</td>
+                      <td className="p-3.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-slate-100 text-slate-700">{ord.status}</span></td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
