@@ -396,7 +396,7 @@ export const AdminPanel: React.FC = () => {
               <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
                 <div className="text-[10px] text-slate-500 font-bold uppercase">1. Pedidos de Hoy</div>
                 <div className="text-2xl font-black text-slate-950 mt-1 font-mono">{todayOrdersCount}</div>
-                <div className="text-[10px] text-emerald-600 font-bold mt-0.5">+14% vs ayer</div>
+                <div className="text-[10px] text-emerald-600 font-bold mt-0.5">+0% vs ayer</div>
               </div>
 
               {/* 2. Servicios activos */}
@@ -409,7 +409,7 @@ export const AdminPanel: React.FC = () => {
               {/* 3. Servicios completados */}
               <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
                 <div className="text-[10px] text-slate-500 font-bold uppercase">3. Completados</div>
-                <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">{completedOrders.length + 14}</div>
+                <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">{completedOrders.length + 0}</div>
                 <div className="text-[10px] text-emerald-600 font-bold mt-0.5">100% de entrega</div>
               </div>
 
@@ -557,8 +557,8 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {drivers.slice(0, 4).map((drv, idx) => {
-                const todayCounts = [8, 6, 5, 4][idx] || 3;
-                const revenues = [88.0, 64.0, 52.0, 46.0][idx] || 35.0;
+                const todayCounts = 0;
+                const revenues = 0;
                 const comm = revenues * 0.2;
                 const net = revenues - comm;
 
