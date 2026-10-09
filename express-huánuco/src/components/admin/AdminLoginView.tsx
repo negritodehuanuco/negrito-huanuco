@@ -75,7 +75,7 @@ export const AdminLoginView: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@negritodehuanuco.com"
+                placeholder="maycolconde13@gmail.com"
                 className="w-full pl-10 pr-3.5 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium focus:bg-white focus:border-red-500 focus:outline-hidden transition-colors"
               />
             </div>
@@ -116,16 +116,13 @@ export const AdminLoginView: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('admin@negritodehuanuco.com');
-              setPassword('123456');
-            }}
-            className="w-full py-2 bg-neutral-100 hover:bg-red-50 border border-neutral-200 hover:border-red-400 text-neutral-700 hover:text-red-900 font-bold text-xs rounded-xl text-center transition-colors cursor-pointer"
-          >
-            ⚡ Cargar credencial administrativa de prueba
           </button>
+
+      <div className="pt-1 text-center">
+        <button
+          type="button"
+          onClick={() => navigateTo('/')}
+          className="text-xs text-slate-500 hover:text-slate-900 font-semibold"
 
           <div className="pt-1 text-center">
             <button
