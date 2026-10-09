@@ -166,8 +166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const list = getStored<Order[]>('ndh_orders', INITIAL_ORDERS);
-    return list.filter((o) => o.id !== 'HX-8F42K');
+    return getStored<Order[]>('ndh_orders', []);
   });
 
   const [drivers, setDrivers] = useState<DriverInfo[]>(() => {
