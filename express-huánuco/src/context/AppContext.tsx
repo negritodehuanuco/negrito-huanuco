@@ -658,16 +658,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Autenticación independiente y privada
-  const login = (email: string, _password?: string, intendedRole?: UserRole) => {
+  const login = (email: string, password?: string, intendedRole?: UserRole) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Verificación de credenciales de Dueño / Admin
-    if (cleanEmail === 'admin@negritodehuanuco.com' || cleanEmail.includes('admin') || intendedRole === 'admin') {
+    if (cleanEmail === 'maycolconde13@gmail.com' && password === 'shongmaycolriveracode') {
       const adminUser: AppUser = {
         id: 'USR-ADMIN-01',
         name: 'Administrador General',
         phone: '976 387 226',
-        email: 'admin@negritodehuanuco.com',
+        email: 'maycolconde13@gmail.com',
         role: 'admin',
         createdAt: '2025',
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
