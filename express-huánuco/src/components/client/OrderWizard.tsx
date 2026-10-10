@@ -41,7 +41,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   onFinishOrder,
   initialService = 'paquete',
 }) => {
-  const { createOrder, commissionConfig, calculateFare } = useApp();
+  const { createOrder, commissionConfig, calculateFare, currentUser, openAuthModal } = useApp();
 
   // Step state: 1 to 7
   const [step, setStep] = useState<number>(1);
@@ -167,7 +167,22 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
     const finalServicePrice = userProposed > 0 ? userProposed : pricing.servicePrice;
     const itemCost = serviceType === 'compra' ? Number(estimatedItemCost) || 0 : 0;
     const finalTotal = finalServicePrice + itemCost;
+    if (!currentUser) {
+      openAuthModal('register');
+      return;
+    }
 
+    const newOrder = createOrder({
+      serviceType,
+      pickup: {
+        ...pickup,
+        reference: pickupRefDetail ? `${pickup.reference} - ${pickupRefDetail}` : pickup.reference,
+      },
+      destination: {
+        ...destination,
+        reference: destRefDetail ? `${destination.reference} - ${destRefDetail}` : destination.reference,
+      },
+      // ... resto de los campos
     const newOrder = createOrder({
       serviceType,
       pickup: {
