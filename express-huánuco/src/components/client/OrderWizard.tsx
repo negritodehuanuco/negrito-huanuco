@@ -51,14 +51,13 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
     serviceType === 'compra' ? Number(estimatedItemCost) || 0 : 0
   );
 
-  const handleSubmitOrder = () => {
+ const handleSubmitOrder = () => {
     const isYapeAnticipado = paymentMethod === 'yape_anticipado';
-    const userProposed = parseFloat(customProposedPrice !== '' ? customProposedPrice : String(pricing.servicePrice));
+    const userProposed = parseFloat(customProposedPrice !== '' ? customProposedPrice : pricing.servicePrice);
     const finalServicePrice = userProposed > 0 ? userProposed : pricing.servicePrice;
     const itemCost = serviceType === 'compra' ? Number(estimatedItemCost) || 0 : 0;
     const finalTotal = finalServicePrice + itemCost;
 
-    // BLOQUEO OBLIGATORIO: El usuario debe tener cuenta creada / sesión iniciada
     if (!currentUser) {
       openAuthModal('register');
       return;
