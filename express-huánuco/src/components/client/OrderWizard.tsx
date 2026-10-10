@@ -163,10 +163,11 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
 
   const handleSubmitOrder = () => {
     const isYapeAnticipado = paymentMethod === 'yape_anticipado';
-    const userProposed = parseFloat(customProposedPrice !== '' ? customProposedPrice : pricing.servicePrice.toString());
+    const userProposed = parseFloat(customProposedPrice !== '' ? customProposedPrice : pricing.servicePrice);
     const finalServicePrice = userProposed > 0 ? userProposed : pricing.servicePrice;
     const itemCost = serviceType === 'compra' ? Number(estimatedItemCost) || 0 : 0;
     const finalTotal = finalServicePrice + itemCost;
+
     if (!currentUser) {
       openAuthModal('register');
       return;
