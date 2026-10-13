@@ -1,21 +1,50 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>NEGRITO DE HUÁNUCO · negritodehuanuco.com</title>
-    <meta name="description" content="Plataforma oficial de delivery, mandados y mensajería en Huánuco - negritodehuanuco.com. Colores oficiales: Negro, Blanco y Rojo." />
-    <meta property="og:title" content="NEGRITO DE HUÁNUCO · negritodehuanuco.com" />
-    <meta property="og:description" content="Plataforma oficial de delivery, mandados y mensajería en Huánuco - negritodehuanuco.com" />
+    <!-- Viewport optimizado para soporte táctil y notch de celulares -->
+    <meta 
+      name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" 
+    />
+    
+    <title>NEGRITO DE HUÁNUCO · Delivery, Encomiendas y Mandados</title>
+    <meta name="description" content="Plataforma oficial de delivery, compras, mandados y mensajería en Huánuco, Amarilis y Pillco Marca. Rápido, seguro y al mejor precio." />
+    <meta name="keywords" content="delivery huanuco, mandados huanuco, courier huanuco, taxi moto huanuco, negrito de huanuco" />
+    <meta name="author" content="Negrito de Huánuco" />
+
+    <!-- Color de la barra de navegación del navegador (Chrome, Safari, iOS) -->
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Negrito Huánuco" />
+
+    <!-- Favicon e íconos para pantalla de inicio -->
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="apple-touch-icon" href="/vite.svg" />
+
+    <!-- Open Graph / Redes Sociales (Facebook, WhatsApp, Telegram) -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_PE" />
+    <meta property="og:site_name" content="NEGRITO DE HUÁNUCO" />
+    <meta property="og:title" content="NEGRITO DE HUÁNUCO · Delivery y Mensajería" />
+    <meta property="og:description" content="Pide comida, compras o envía paquetes en Huánuco con la tarifa que tú propones." />
+
+    <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
+    <meta name="twitter:title" content="NEGRITO DE HUÁNUCO" />
+    <meta name="twitter:description" content="Plataforma oficial de delivery y mandados en Huánuco." />
+
+    <!-- Preconexión de fuentes y carga optimizada -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link 
+      href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" 
+      rel="stylesheet" 
+    />
   </head>
-  <body class="bg-white text-zinc-950 antialiased selection:bg-red-600 selection:text-white">
-    <div id="root"></div>
+  <body class="bg-white text-zinc-950 antialiased selection:bg-red-600 selection:text-white min-h-screen overflow-x-hidden">
+    <div id="root" class="min-h-screen flex flex-col"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
