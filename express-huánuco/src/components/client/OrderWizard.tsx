@@ -41,7 +41,15 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   onFinishOrder,
   initialService = 'paquete',
 }) => {
-  const { createOrder, commissionConfig, calculateFare } = useApp();
+  const { 
+    createOrder, 
+    commissionConfig, 
+    calculateFare, 
+    currentUser, 
+    openAuthModal, 
+    setIsAuthModalOpen,
+    setShowAuthModal 
+  } = useApp() as any;
 
   // Step state: 1 to 7
   const [step, setStep] = useState<number>(1);
@@ -95,7 +103,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   const [customProposedPrice, setCustomProposedPrice] = useState<string>('');
 
   // Calculated distance & pricing
-  // Approximate distance using coords
   const dist = Math.max(
     1.2,
     Math.round(
@@ -137,7 +144,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
           else setDestination(newPt);
         },
         () => {
-          // Fallback if permission denied
           const fallback = HUANUCO_LANDMARKS[0];
           if (target === 'pickup') setPickup(fallback);
           else setDestination(fallback);
@@ -162,6 +168,20 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   };
 
   const handleSubmitOrder = () => {
+    // BLOQUEO OBLIGATORIO: Evita crear pedidos si no ha iniciado sesión
+    if (!currentUser) {
+      if (typeof openAuthModal === 'function') {
+        openAuthModal('register');
+      } else if (typeof setIsAuthModalOpen === 'function') {
+        setIsAuthModalOpen(true);
+      } else if (typeof setShowAuthModal === 'function') {
+        setShowAuthModal(true);
+      } else {
+        alert('Debes iniciar sesión o registrarte para solicitar un pedido.');
+      }
+      return;
+    }
+
     const isYapeAnticipado = paymentMethod === 'yape_anticipado';
     const userProposed = parseFloat(customProposedPrice !== '' ? customProposedPrice : pricing.servicePrice.toString());
     const finalServicePrice = userProposed > 0 ? userProposed : pricing.servicePrice;
@@ -179,8 +199,8 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
         reference: destRefDetail ? `${destination.reference} - ${destRefDetail}` : destination.reference,
       },
       customer: {
-        name: customerName,
-        phone: customerPhone,
+        name: currentUser.name || customerName,
+        phone: currentUser.phone || customerPhone,
       },
       details: {
         description: serviceType === 'transporte'
@@ -217,14 +237,14 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
       },
       payment: {
         method: paymentMethod,
-        isVerified: !isYapeAnticipado, // If anticipado, needs admin verification
+        isVerified: !isYapeAnticipado,
         receiptUrl: receiptPreview || undefined,
         yapeNumber: commissionConfig.yapeNumber,
       },
     });
 
     setCreatedOrderId(newOrder.id);
-    setStep(7); // Jump to Confirmation
+    setStep(7);
   };
 
   return (
@@ -287,7 +307,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </p>
             </div>
 
-            {/* Address Search & My Location Button */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <MapPin className="absolute left-3.5 top-3.5 w-4 h-4 text-emerald-600" />
@@ -309,7 +328,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </button>
             </div>
 
-            {/* Reference Input */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Referencia del lugar
@@ -323,7 +341,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               />
             </div>
 
-            {/* Interactive Map */}
             <HuanucoMap
               pickup={pickup}
               interactiveMode="pickup"
@@ -338,7 +355,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               }}
             />
 
-            {/* Quick Landmark Chips */}
             <div>
               <div className="text-xs font-semibold text-slate-500 mb-1.5">
                 Lugares frecuentes de recojo:
@@ -380,7 +396,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </p>
             </div>
 
-            {/* Address Search & My Location Button */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <MapPin className="absolute left-3.5 top-3.5 w-4 h-4 text-amber-600" />
@@ -402,7 +417,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </button>
             </div>
 
-            {/* Reference Input */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Referencia de la entrega
@@ -416,7 +430,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               />
             </div>
 
-            {/* Interactive Map */}
             <HuanucoMap
               pickup={pickup}
               destination={destination}
@@ -432,7 +445,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               }}
             />
 
-            {/* Quick Destination Chips */}
             <div>
               <div className="text-xs font-semibold text-slate-500 mb-1.5">
                 Destinos sugeridos:
@@ -475,7 +487,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Card 1: Paquete */}
               <button
                 type="button"
                 onClick={() => {
@@ -501,7 +512,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </button>
 
-              {/* Card 2: Documento */}
               <button
                 type="button"
                 onClick={() => {
@@ -527,7 +537,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </button>
 
-              {/* Card 3: Compra por encargo */}
               <button
                 type="button"
                 onClick={() => {
@@ -553,7 +562,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </button>
 
-              {/* Card 4: Mandado */}
               <button
                 type="button"
                 onClick={() => {
@@ -579,7 +587,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </button>
 
-              {/* Card 5: Otro servicio */}
               <button
                 type="button"
                 onClick={() => {
@@ -605,7 +612,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </button>
 
-              {/* Card 6: Transporte (Moto o Mototaxi) */}
               <button
                 type="button"
                 onClick={() => {
@@ -698,7 +704,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    value={customerName}
+                    value={currentUser?.name || customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Tu nombre y apellido"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:bg-white"
@@ -714,7 +720,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="tel"
-                    value={customerPhone}
+                    value={currentUser?.phone || customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="999 999 999"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-amber-500 focus:bg-white"
@@ -723,7 +729,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* General package fields */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -752,7 +757,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* IF SHOPPING COMPRA POR ENCARGO: Mandatory fields and clear warning */}
             {serviceType === 'compra' && (
               <div className="p-4 bg-amber-50/70 border-2 border-amber-300 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm">
@@ -801,7 +805,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   />
                 </div>
 
-                {/* Prominent Mandatory Warning from Brief */}
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-900 font-medium">
                   <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                   <div>
@@ -814,7 +817,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             )}
 
-            {/* Additional instructions */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Instrucciones adicionales para el repartidor
@@ -854,7 +856,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </p>
             </div>
 
-            {/* Editable Proposed Price Card */}
             <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white rounded-3xl border border-slate-800 shadow-xl space-y-4">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-extrabold text-amber-400 uppercase tracking-wider">
@@ -865,7 +866,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </span>
               </div>
 
-              {/* Big Editable Input */}
               <div className="flex items-center justify-center gap-3 py-2 bg-slate-800/80 rounded-2xl border border-amber-500/40 p-3">
                 <span className="text-3xl sm:text-4xl font-black font-mono text-amber-400">
                   S/
@@ -881,7 +881,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 />
               </div>
 
-              {/* Quick Adjust Buttons */}
               <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
@@ -912,7 +911,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </button>
               </div>
 
-              {/* Discreet Referential Price vs Proposed Price comparison (as requested in brief) */}
               <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/80 text-xs space-y-1">
                 <div className="flex justify-between items-center text-slate-400">
                   <span>Precio referencial:</span>
@@ -931,7 +929,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               </div>
 
-              {/* Extra Shopping item cost if compra */}
               {serviceType === 'compra' && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-1">
                   <div className="flex justify-between items-center text-amber-200 font-semibold">
@@ -953,7 +950,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               )}
             </div>
 
-            {/* Route summary box */}
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
@@ -980,7 +976,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* Metrics cards */}
             <div className="grid grid-cols-3 gap-2">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
                 <div className="text-[10px] font-bold text-slate-500 uppercase">Distancia</div>
@@ -998,7 +993,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* Primary Action Button: SOLICITAR CON ESTE PRECIO */}
             <button
               type="button"
               onClick={() => setStep(6)}
@@ -1030,7 +1024,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
             </div>
 
             <div className="space-y-2">
-              {/* Option 1: Efectivo (disabled if compra) */}
               <label
                 className={`p-3.5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   serviceType === 'compra'
@@ -1066,7 +1059,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </span>
               </label>
 
-              {/* Option 2: Yape */}
               <label
                 className={`p-3.5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'yape'
@@ -1093,7 +1085,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 <span className="text-xs font-bold text-purple-700">Yape</span>
               </label>
 
-              {/* Option 3: Yape anticipado */}
               <label
                 className={`p-3.5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'yape_anticipado'
@@ -1128,7 +1119,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </label>
             </div>
 
-            {/* Details when YAPE ANTICIPADO is selected */}
             {paymentMethod === 'yape_anticipado' && (
               <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
@@ -1141,7 +1131,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-xl border border-purple-200">
-                  {/* Mock Yape QR */}
                   <div className="w-24 h-24 bg-purple-900 rounded-xl p-2 flex flex-col items-center justify-center text-white shrink-0 shadow-inner">
                     <QrCode className="w-16 h-16 text-amber-400" />
                     <span className="text-[9px] font-bold tracking-tight text-white mt-0.5">YAPE HUÁNUCO</span>
@@ -1175,7 +1164,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   </div>
                 </div>
 
-                {/* Upload proof button / simulation */}
                 <div className="space-y-2">
                   <div className="text-xs font-bold text-slate-800">Subir comprobante de pago:</div>
                   <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-purple-300 hover:border-purple-500 rounded-xl bg-white cursor-pointer transition-colors">
@@ -1206,7 +1194,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   </label>
                 </div>
 
-                {/* Status notice */}
                 <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
                   <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
@@ -1253,7 +1240,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </p>
             </div>
 
-            {/* Order Code Box */}
             <div className="p-4 bg-slate-950 text-white rounded-2xl max-w-sm mx-auto shadow-md">
               <div className="text-xs text-slate-400 uppercase font-semibold">Código del pedido</div>
               <div className="text-2xl font-mono font-extrabold text-amber-400 tracking-wider my-1">
@@ -1264,7 +1250,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* Quick summary grid */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left text-xs space-y-2 max-w-md mx-auto">
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <span className="text-slate-500">Servicio:</span>
@@ -1294,7 +1279,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
               </div>
             </div>
 
-            {/* CTAs */}
             <div className="space-y-2 max-w-sm mx-auto pt-2">
               <button
                 type="button"
