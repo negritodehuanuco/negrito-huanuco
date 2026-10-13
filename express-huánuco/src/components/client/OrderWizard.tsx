@@ -58,10 +58,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
     const itemCost = serviceType === 'compra' ? Number(estimatedItemCost) || 0 : 0;
     const finalTotal = finalServicePrice + itemCost;
 
-    if (!currentUser) {
-      openAuthModal('register');
-      return;
-    }
+
 
     const newOrder = createOrder({
       serviceType,
