@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   ArrowLeft,
   Bike,
   Phone,
   MessageCircle,
-  Clock,
   MapPin,
-  CheckCircle2,
-  ChevronRight,
   ShieldCheck,
   AlertCircle,
   Share2,
-  Play,
-  RotateCcw,
   Lock
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -34,24 +29,13 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
   orderId,
   onBack,
 }) => {
-  const { orders, updateOrderStatus, setOpenWhatsAppModal, openChatModal } = useApp();
+  const { orders, openChatModal } = useApp();
   const order = orders.find((o) => o.id === orderId) || orders[0];
 
   const currentStepIndex = Math.max(
     0,
     TRACKING_STEPS.findIndex((s) => s.status === order?.status)
   );
-
-  // Simulated moving driver position along route
-  const [driverOffset, setDriverOffset] = useState(0.4);
-
-  // Auto-move driver slightly for realism
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDriverOffset((prev) => (prev > 0.85 ? 0.2 : prev + 0.05));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
 
   if (!order) {
     return (
@@ -70,17 +54,8 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
     );
   }
 
-  // Handle advancing status for demo testing
-  const handleNextStep = () => {
-    if (currentStepIndex < TRACKING_STEPS.length - 1) {
-      const nextStatus = TRACKING_STEPS[currentStepIndex + 1].status;
-      updateOrderStatus(order.id, nextStatus, nextStatus === 'entregado' ? 'Entregado a cliente en mano' : undefined);
-    }
-  };
-
-  const handleReset = () => {
-    updateOrderStatus(order.id, 'recibido');
-  };
+  // La posición del conductor solo se calcula si un conductor real ya tomó la orden
+  const hasRealDriver = !!order.driver && order.status !== 'recibido';
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto pb-12">
@@ -105,33 +80,6 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
         </div>
       </div>
 
-      {/* Demo Controls Bar */}
-      <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2 text-amber-900 font-semibold">
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-          <span>Simulador de Seguimiento en Vivo:</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleNextStep}
-            disabled={order.status === 'entregado'}
-            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 transition-colors"
-          >
-            <Play className="w-3 h-3 fill-slate-950" />
-            <span>Avanzar Estado</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="p-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs border border-amber-300"
-            title="Reiniciar a recibido"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
       {/* Live Map of Huánuco */}
       <div className="bg-white rounded-3xl p-3 border border-slate-200 shadow-md">
         <HuanucoMap
@@ -140,10 +88,10 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
           interactiveMode="tracking"
           heightClass="h-72 sm:h-80"
           driverLocation={
-            order.status !== 'recibido'
+            hasRealDriver
               ? {
-                  lat: order.pickup.lat + (order.destination.lat - order.pickup.lat) * driverOffset,
-                  lng: order.pickup.lng + (order.destination.lng - order.pickup.lng) * driverOffset,
+                  lat: order.pickup.lat + (order.destination.lat - order.pickup.lat) * 0.5,
+                  lng: order.pickup.lng + (order.destination.lng - order.pickup.lng) * 0.5,
                 }
               : undefined
           }
@@ -163,7 +111,9 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
                 {TRACKING_STEPS[currentStepIndex]?.label || order.status}
               </div>
               <div className="text-[11px] text-slate-400">
-                {TRACKING_STEPS[currentStepIndex]?.desc}
+                {order.driver 
+                  ? TRACKING_STEPS[currentStepIndex]?.desc 
+                  : 'Esperando ofertas de repartidores disponibles en Huánuco'}
               </div>
             </div>
           </div>
@@ -177,7 +127,7 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
         </div>
       </div>
 
-      {/* Driver Card (if assigned) OR Offers Received View (if awaiting/negotiating) */}
+      {/* Driver Card (si está asignado) O Vista de ofertas en espera */}
       {order.driver ? (
         <div className="space-y-3">
           {/* Frozen Price Banner */}
@@ -249,7 +199,7 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
 
               <a
                 href={`https://wa.me/51${order.driver.phone.replace(/\s+/g, '')}?text=${encodeURIComponent(
-                  `Hola ${order.driver.name}, te escribo por el pedido ${order.id} de NEGRITO DE HUÁNUCO.`
+                  `Hola ${order.driver.name}, te escribo por el pedido${order.id} de NEGRITO DE HUÁNUCO.`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -272,7 +222,6 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
         </h4>
 
         <div className="relative pl-6 space-y-5">
-          {/* Vertical line indicator */}
           <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200" />
 
           {TRACKING_STEPS.map((step, idx) => {
@@ -281,7 +230,6 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
 
             return (
               <div key={idx} className="relative flex items-start gap-3">
-                {/* Dot */}
                 <div
                   className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
                     isCurrent
@@ -353,7 +301,7 @@ export const TrackingView: React.FC<{ orderId: string; onBack: () => void }> = (
       <div className="flex flex-col sm:flex-row gap-2 pt-2">
         <a
           href={`https://wa.me/?text=${encodeURIComponent(
-            `Sigue el delivery en tiempo real de NEGRITO DE HUÁNUCO (negritodehuanuco.com) código ${order.id}: ${window.location.href}`
+            `Sigue el delivery en tiempo real de NEGRITO DE HUÁNUCO (negritodehuanuco.com) código ${order.id}:${window.location.href}`
           )}`}
           target="_blank"
           rel="noreferrer"
